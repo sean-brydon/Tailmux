@@ -36,3 +36,79 @@ tailmux forwards --json
 ```
 
 Options follow the host and may appear before or after port arguments. There is no automatic process picker or port discovery yet.
+
+## Public URLs with Cloudflare or ngrok
+
+You can publish one forwarded HTTP port through a separately installed tunnel client. Tailmux currently has no `--cloudflare` or `--ngrok` flags; the commands below use the provider's CLI alongside Tailmux.
+
+Start an unnamed forward on a spare local port:
+
+```bash
+tailmux forward personal/devbox 13000:3000
+```
+
+The route is: public HTTPS URL → local tunnel client → `127.0.0.1:13000` → Tailmux SSH → remote `127.0.0.1:3000`. Only this selected port is published. Use another local port for another box.
+
+### Cloudflare: temporary preview
+
+After [installing cloudflared](https://developers.cloudflare.com/tunnel/setup/), run locally:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:13000
+```
+
+This prints a random `trycloudflare.com` HTTPS URL. It is a temporary preview, not a permanent address. See [Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/) for limitations.
+
+### Cloudflare: stable hostname
+
+For a reusable address such as `preview.example.com`, use a named tunnel and a domain managed in your Cloudflare account. Following the [Cloudflare setup guide](https://developers.cloudflare.com/tunnel/setup/):
+
+1. Create a tunnel in Cloudflare and run its connector on the same computer as the Tailmux forward.
+2. Add a published application route for `preview.example.com`.
+3. Set its service URL to `http://127.0.0.1:13000`.
+4. Keep the connector running and reopen the same Tailmux forward whenever needed.
+
+The hostname stays the same across connector restarts. Cloudflare's dashboard creates the DNS record for the published route; see [hostname routing](https://developers.cloudflare.com/tunnel/routing/). Keep connector credentials outside the repository.
+
+### ngrok: account domain
+
+Install ngrok and authenticate it using your account's setup instructions. Then run:
+
+```bash
+ngrok http http://127.0.0.1:13000
+```
+
+The free plan includes an automatically assigned development domain; it does not let you choose a custom domain. See [ngrok's current account limits](https://ngrok.com/docs/pricing-limits/free-plan-limits).
+
+To explicitly select a domain already available in your ngrok account:
+
+```bash
+ngrok http http://127.0.0.1:13000 --url https://YOUR-ASSIGNED-DOMAIN.ngrok-free.app
+```
+
+Replace the example with your actual domain. Custom domains require the relevant account support and DNS setup. The [ngrok CLI reference](https://ngrok.com/docs/agent/cli) documents `--url`.
+
+### Redirects, access and uptime
+
+Use an **unnamed** Tailmux forward for these examples. Named routes match the HTTP Host header and reject unknown public hostnames. Their localhost rewriting targets the local HTTP name and port, not the public HTTPS origin.
+
+A tunnel alone does not fix an application that emits `http://localhost:3000` redirects. Configure the application's public base URL, trusted proxy/origin settings and OAuth callback registration for the public HTTPS hostname where required. Tailmux does not currently provide automatic public-origin rewriting or eliminate those environment changes.
+
+Publishing a URL makes the selected application reachable beyond your tailnet. Configure provider access controls or application authentication when the preview should be private. Do not publish Orca runtime or other control ports as a web preview.
+
+A stable URL does not guarantee availability: the remote app, SSH connection, Tailmux daemon and tunnel client must all be running. A sleeping laptop breaks this route. For an always-on URL, run the provider connector on the remote box against `http://127.0.0.1:3000`; that route does not need Tailmux forwarding.
+
+Stop the foreground connector with Ctrl+C, then use `tailmux unforward <id>` to stop the local forward. A persistent provider route or DNS record remains until removed in that provider. Tailmux does not manage the external connector's lifecycle.
+
+### Proposed CLI integration
+
+A future integration could wrap the same workflow:
+
+```bash
+# Proposed syntax only — not implemented
+tailmux forward personal/devbox 3000 --cloudflare
+tailmux forward personal/devbox 3000 --cloudflare --hostname preview.example.com
+tailmux forward personal/devbox 3000 --ngrok --url https://YOUR-ASSIGNED-DOMAIN.ngrok-free.app
+```
+
+The integration should distinguish temporary previews from saved hostnames, track the connector alongside its forward, and stop it with `unforward`. Public HTTPS redirect handling needs an explicit external-origin setting. Provider account setup and domain ownership would still be required for stable addresses.

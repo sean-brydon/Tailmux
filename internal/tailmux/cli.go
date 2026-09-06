@@ -25,8 +25,8 @@ const usage = `Tailmux: remote agent sessions across separate Tailscale accounts
   tailmux orca connect <host>     Pair a running Orca runtime over Tailmux
   tailmux orca status <host>      Check the paired runtime and restore its tunnel
   tailmux orca exec <host> -- <command...>   Run an Orca CLI command on that runtime
-  tailmux terminal [host]        Open tmux or Zellij with a searchable box picker
-  tailmux terminal --backend tmux|zellij [host]   Override the backend for this launch
+  tailmux terminal [local|host]        Open tmux or Zellij with a searchable box picker
+  tailmux terminal --backend tmux|zellij [local|host]   Override the backend for this launch
   tailmux terminal --default tmux|zellij   Save the default without launching
   tailmux herdr sessions <host|--all> [--json]   List remote Herdr sessions
   tailmux forward <host> <ports...> [--name NAME] [--no-rewrite] [--json]

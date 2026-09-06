@@ -82,3 +82,32 @@ func TestTerminalBackendOverrideDoesNotChangePreference(t *testing.T) {
 		t.Fatalf("preference changed: %+v %v", cfg, err)
 	}
 }
+
+func TestLocalTerminalWithoutProfiles(t *testing.T) {
+	name, err := terminalTarget(Config{}, "local")
+	if err != nil || name != "local" {
+		t.Fatalf("local requires no host configuration: %q %v", name, err)
+	}
+	if _, err := terminalTarget(Config{}, "unknown"); err == nil {
+		t.Fatal("unknown remote accepted")
+	}
+	t.Setenv("SHELL", "/bin/sh")
+	cmd := localTerminalShell()
+	if cmd.Path != "/bin/sh" || strings.Join(cmd.Args, " ") != "/bin/sh -l" {
+		t.Fatalf("unexpected local command: %v", cmd.Args)
+	}
+}
+
+func TestPickerDisplayPreservesTarget(t *testing.T) {
+	names := []string{"local", "alpha/worker-a", "beta/offline"}
+	rows := terminalPickerRows(names, map[string]string{"local": "this machine", "alpha/worker-a": "online", "beta/offline": "offline"}, map[string]bool{"alpha/worker-a": true})
+	for i, row := range rows {
+		target, _, ok := strings.Cut(row, "\t")
+		if !ok || strings.TrimSpace(target) != names[i] {
+			t.Fatalf("display lost routing identity: %q", row)
+		}
+	}
+	if !strings.Contains(rows[1], "online · saved") || !strings.Contains(rows[0], "this machine") {
+		t.Fatal(rows)
+	}
+}

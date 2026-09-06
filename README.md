@@ -137,6 +137,12 @@ Default keys with nested Herdr sessions:
 
 These are nested terminal interfaces. The outer sidebar lists hosts; the inner sidebar lists that host's remote workspaces and agents. A combined cross-host agent list is not implemented yet. Custom Herdr keybindings may differ from the defaults above.
 
+### Public preview URLs
+
+Cloudflare and ngrok can publish a specific raw forward, for example `tailmux forward personal/devbox 13000:3000`. Cloudflare named tunnels provide a stable custom hostname; ngrok supports an assigned account domain. Quick Cloudflare tunnels use temporary URLs. See the [public URL guide](docs/content/docs/forwarding.mdx#public-urls-with-cloudflare-or-ngrok) for setup, redirect limitations and cleanup.
+
+The proposed `--cloudflare` and `--ngrok` flags are not implemented yet; use the provider CLI alongside Tailmux. A stable hostname still requires the app, forward and connector to stay running.
+
 ## Documentation site
 
 The Fumadocs site lives in [`docs/`](docs/). It includes setup, account profiles,
@@ -249,3 +255,15 @@ tailmux orca exec lab/worker -- terminal list --json
 ```
 
 `serve` starts the preconfigured remote `tailmux-orca.service` user unit; it does not install Orca or restart active agents. `connect` pairs an already-running runtime. The remote server must advertise a unique laptop loopback port and its listener must be protected by a host firewall. See the [complete setup guide](docs/content/docs/orca.mdx). Orca owns remote projects, terminals and credentials; Tailmux owns the transport.
+
+### Open this computer in the terminal
+
+```bash
+tailmux terminal local
+tailmux terminal --backend tmux local
+tailmux terminal --backend zellij local
+```
+
+The box picker lists `local` (this machine) first, followed by remote targets with aligned online/offline and saved labels. Local access works without a Tailscale profile or SSH connection. It opens your `$SHELL` as a login shell (falling back to `/bin/sh`); new panes in the `local` tab/window also run locally. Exiting the shell closes that pane. Keep the tab/window named `local` so new panes retain this routing.
+
+`local` is reserved by `terminal` for this computer. Use the full `profile/local` target if a remote machine is also named local. Existing shortcuts open the same picker from local and remote tabs.

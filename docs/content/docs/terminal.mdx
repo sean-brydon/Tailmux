@@ -39,3 +39,15 @@ Zellij uses simplified UI so its controls do not require special arrow fonts. Pa
 A second attached client with a smaller terminal can constrain a tab's dimensions. Detach unused clients rather than stopping the session. See [troubleshooting](/docs/troubleshooting).
 
 Zellij reuses a **running** local session when you detach. Closing a tab with Ctrl+T, then X removes it. After closing the last tab, the next `tailmux terminal` starts a fresh session. Tailmux disables disk-layout resurrection so previously closed tabs cannot return from an old snapshot. Remote tmux shells remain on their hosts; this does not stop remote processes.
+
+### Open this computer in the terminal
+
+```bash
+tailmux terminal local
+tailmux terminal --backend tmux local
+tailmux terminal --backend zellij local
+```
+
+The box picker lists `local` (this machine) first, followed by remote targets with aligned online/offline and saved labels. Local access works without a Tailscale profile or SSH connection. It opens your `$SHELL` as a login shell (falling back to `/bin/sh`); new panes in the `local` tab/window also run locally. Exiting the shell closes that pane. Keep the tab/window named `local` so new panes retain this routing.
+
+`local` is reserved by `terminal` for this computer. Use the full `profile/local` target if a remote machine is also named local. Existing shortcuts open the same picker from local and remote tabs.

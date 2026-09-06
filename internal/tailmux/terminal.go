@@ -72,11 +72,11 @@ func terminalCLI(dir string, args []string) error {
 		return fmt.Errorf("unknown internal terminal action")
 	}
 	if len(rest) > 1 {
-		return fmt.Errorf("usage: tailmux terminal [--backend tmux|zellij] [profile/host]")
+		return fmt.Errorf("usage: tailmux terminal [--backend tmux|zellij] [local|profile/host]")
 	}
 	target := ""
 	if len(rest) == 1 {
-		target, err = canonicalTarget(cfg, rest[0])
+		target, err = terminalTarget(cfg, rest[0])
 		if err != nil {
 			return err
 		}
@@ -137,6 +137,14 @@ func (t terminal) attachZellij(cmd *exec.Cmd, target string) error {
 	cmd.Process.Signal(os.Interrupt)
 	<-done
 	return fmt.Errorf("Zellij did not open target %s", target)
+}
+
+// "local" is reserved only by the terminal command, never by SSH host routing.
+func terminalTarget(c Config, target string) (string, error) {
+	if target == "local" {
+		return target, nil
+	}
+	return canonicalTarget(c, target)
 }
 func canonicalTarget(c Config, target string) (string, error) {
 	h, err := c.host(target)
@@ -280,7 +288,7 @@ func (t terminal) selectHost(target string) error {
 }
 func (t terminal) pick(cfg Config) error {
 	fmt.Fprintln(os.Stderr, "Loading boxes…")
-	rows := map[string]string{}
+	rows := map[string]string{"local": "this machine"}
 	saved := map[string]bool{}
 	for _, name := range hostNames(cfg) {
 		target, err := canonicalTarget(cfg, name)
@@ -312,14 +320,14 @@ func (t terminal) pick(cfg Config) error {
 			rows[h.Target] = state
 		}
 	}
-	if len(rows) == 0 {
-		return fmt.Errorf("no boxes found; log in to a profile first")
-	}
 	names := make([]string, 0, len(rows))
 	for name := range rows {
 		names = append(names, name)
 	}
 	sort.Slice(names, func(i, j int) bool {
+		if names[i] == "local" || names[j] == "local" {
+			return names[i] == "local"
+		}
 		if saved[names[i]] != saved[names[j]] {
 			return saved[names[i]]
 		}
@@ -328,11 +336,8 @@ func (t terminal) pick(cfg Config) error {
 		}
 		return names[i] < names[j]
 	})
-	lines := []string{}
-	for _, name := range names {
-		lines = append(lines, name+"\t"+rows[name])
-	}
-	cmd := exec.Command("fzf", "--prompt=Box > ", "--header=Enter: connect/switch | Esc: cancel", "--layout=reverse", "--border", "--delimiter=\t", "--with-nth=1,2", "--nth=1", "--sync", "--print-query")
+	lines := terminalPickerRows(names, rows, saved)
+	cmd := exec.Command("fzf", "--prompt=Search boxes > ", "--header=LOCAL + TAILNETS   /   Enter: open or switch   /   Esc: cancel", "--layout=reverse", "--border=rounded", "--border-label= Tailmux · Boxes ", "--info=inline", "--pointer=>", "--marker=+", "--no-hscroll", "--delimiter=\t", "--with-nth=1,2", "--nth=1", "--sync", "--print-query")
 	// Prevent user fzf defaults from turning the picker into a different command flow.
 	for _, e := range os.Environ() {
 		if !strings.HasPrefix(e, "FZF_DEFAULT_") {
@@ -354,6 +359,7 @@ func (t terminal) pick(cfg Config) error {
 		return fmt.Errorf("picker returned no selection")
 	}
 	target, _, _ := strings.Cut(strings.TrimSpace(selection), "\t")
+	target = strings.TrimSpace(target)
 	if _, ok := rows[target]; !ok {
 		return fmt.Errorf("invalid picker selection")
 	}
@@ -368,6 +374,35 @@ func (t terminal) pick(cfg Config) error {
 	}
 	return t.selectHost(target)
 }
+func terminalPickerRows(names []string, states map[string]string, saved map[string]bool) []string {
+	width := 20
+	for _, name := range names {
+		if len(name) > width {
+			width = len(name)
+		}
+	}
+	lines := make([]string, 0, len(names))
+	for _, name := range names {
+		detail := states[name]
+		if saved[name] && detail != "saved" {
+			detail += " · saved"
+		}
+		lines = append(lines, fmt.Sprintf("%-*s\t%s", width, name, detail))
+	}
+	return lines
+}
+
+func localTerminalShell() *exec.Cmd {
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	// Keep multiplexer context so commands in the shell can address their pane.
+	cmd := exec.Command(shell, "-l")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return cmd
+}
+
 func (t terminal) currentTarget() (string, string, error) {
 	if t.backend == "tmux" {
 		pane := os.Getenv("TMUX_PANE")
@@ -413,6 +448,10 @@ func (t terminal) shell(cfg Config) error {
 	}
 	if err != nil {
 		return err
+	}
+	if target == "local" {
+		t.namePane(pane, "Local")
+		return localTerminalShell().Run()
 	}
 	if _, err := cfg.host(target); err != nil {
 		t.namePane(pane, "Boxes")
