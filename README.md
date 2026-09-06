@@ -57,6 +57,10 @@ Use `tailmux hosts add <profile>/<hostname> --user <user> --port <port>` to save
 | `herdr attach <host> [session]` | Run remote `herdr session attach`, defaulting to `agents` |
 | `herdr sessions <host\|--all> [--json]` | List Herdr sessions as a table; `--json` returns structured data |
 | `herdr open [hosts...]` | One local Herdr view across saved or selected hosts |
+| `orca serve <host>` | Start a preconfigured remote Orca user service and connect |
+| `orca connect <host> [--ready-file PATH]` | Pair a running Orca runtime over SSH |
+| `orca status <host>` | Restore its tunnel and verify the runtime |
+| `orca exec <host> -- <command...>` | Run native Orca CLI commands on that runtime |
 | `terminal [--backend tmux\|zellij] [host]` | Open the terminal box picker |
 | `terminal --default tmux\|zellij` | Save backend preference without launching |
 | `forward <host> <ports...> [--name NAME] [--no-rewrite] [--json]` | Forward TCP or serve a named HTTP route |
@@ -233,3 +237,15 @@ Forwards run in the local daemon after the CLI exits. They stop with `unforward`
 After upgrading, reopen `tailmux terminal` to regenerate its configuration. A smaller attached client can constrain a Zellij tab; detach unused clients. Preserve full host tab/window names because new split panes use them for routing.
 
 Zellij reuses a **running** local session when you detach. Closing a tab with Ctrl+T, then X removes it. After closing the last tab, the next `tailmux terminal` starts a fresh session. Tailmux disables disk-layout resurrection so previously closed tabs cannot return from an old snapshot. Remote tmux shells remain on their hosts; this does not stop remote processes.
+
+## Orca serve
+
+Native remote Orca runtimes are supported through SSH tunnels across profiles:
+
+```sh
+tailmux orca serve lab/worker
+tailmux orca status lab/worker
+tailmux orca exec lab/worker -- terminal list --json
+```
+
+`serve` starts the preconfigured remote `tailmux-orca.service` user unit; it does not install Orca or restart active agents. `connect` pairs an already-running runtime. The remote server must advertise a unique laptop loopback port and its listener must be protected by a host firewall. See the [complete setup guide](docs/content/docs/orca.mdx). Orca owns remote projects, terminals and credentials; Tailmux owns the transport.

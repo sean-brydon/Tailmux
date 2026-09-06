@@ -275,9 +275,6 @@ func connectOrca(dir string, cfg Config, target, path string, routes map[string]
 		}
 		for _, e := range list.Result.Environments {
 			if e.Name == target {
-				if e.RuntimeID != "" && e.RuntimeID != route.RuntimeID {
-					return route, fmt.Errorf("Orca environment %s already belongs to a different runtime", target)
-				}
 				for _, ep := range e.Endpoints {
 					if ep.Endpoint == ready.Advertised {
 						route.Environment = e.ID
@@ -311,7 +308,7 @@ func connectOrca(dir string, cfg Config, target, path string, routes map[string]
 	return route, nil
 }
 func orcaCLI(dir string, cfg Config, args []string) error {
-	if len(args) == 0 || (len(args) == 1 && (args[0] == "--help" || args[0] == "help")) {
+	if len(args) == 0 || (len(args) == 1 && (args[0] == "--help" || args[0] == "help")) || (len(args) == 2 && (args[1] == "--help" || args[1] == "-h")) {
 		fmt.Print(orcaUsage)
 		return nil
 	}

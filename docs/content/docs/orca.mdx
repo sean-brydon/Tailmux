@@ -1,0 +1,103 @@
+---
+title: Orca remote runtimes
+description: Connect native orca serve runtimes across separate tailnets.
+icon: Server
+---
+
+`orca serve` runs Orca on the remote machine without a desktop window. Projects, worktrees, terminals and agent processes belong to that runtime. Tailmux supplies an SSH tunnel through the selected Tailscale profile and pairs your local Orca CLI with it.
+
+This integration uses native remote Orca runtimes, rather than placing an SSH shell inside a local Orca terminal. Herdr and `tailmux terminal` remain separate workflows.
+
+## Connect and use a runtime
+
+With the service below configured on the host:
+
+```bash
+tailmux orca serve lab/worker
+tailmux orca status lab/worker
+tailmux orca exec lab/worker -- repo list --json
+tailmux orca exec lab/worker -- terminal list --json
+```
+
+`serve` starts the existing `tailmux-orca.service` systemd user unit, then connects. It does not install Orca or restart an already-running service. If a runtime is already running, `tailmux orca connect lab/worker` pairs it without starting a service. Options follow the target.
+
+The environment is named after the full target, such as `lab/worker`. Tailmux reuses its environment and tunnel on subsequent calls. `exec` passes commands to the local Orca CLI with that environment explicitly selected; its command output is Orca's normal output. Do not supply another `--environment` or `--pairing-code` through `exec`.
+
+Orca's Remote Orca Servers settings can use the saved environment. Desktop UI interaction depends on the installed Orca version; the connection checks verify the remote runtime, not that a particular desktop view is selected. The integration has been tested against remote Orca 1.4.197.
+
+## Install the remote runtime
+
+Follow Orca's [headless Linux setup guide](https://github.com/stablyai/orca/blob/main/docs/reference/headless-linux-server.md). Install its Linux launcher, Xvfb and Electron libraries, and verify the runtime under your remote SSH user. The Linux CLI is named `orca-ide`; outside managed terminals, bare `orca` may be the GNOME screen reader.
+
+Install the Orca CLI locally too. Tailmux follows `ORCA_CLI_COMMAND`, then `ORCA_DEV_REPO_ROOT` for `orca-dev`; otherwise it uses `orca-ide` on Linux and `orca` on macOS. It strips inherited `ORCA_ENVIRONMENT` and `ORCA_PAIRING_CODE` routing so commands do not accidentally reach another server.
+
+## Choose ports and restrict access
+
+Each runtime needs a unique **local** port on your laptop. Remote machines may use the same server port:
+
+| Target | Laptop endpoint | Remote server port |
+| --- | --- | --- |
+| `lab/worker` | `ws://127.0.0.1:16768` | 6768 |
+| `client/builder` | `ws://127.0.0.1:16769` | 6768 |
+
+These are examples, not built-in host names or port assignments. Tailmux derives both ports from the server's JSON readiness record. It requires an advertised `ws://127.0.0.1:LOCAL_PORT` endpoint for this SSH-tunnel integration. `--pairing-address` controls the advertised address; it does **not** restrict the listener.
+
+Orca 1.4.197 `serve` listens on all IPv4 interfaces. Restrict the selected remote port with a host firewall **before** starting it. For example, on a Linux host using iptables, this rejects incoming non-loopback traffic to port 6768 while SSH forwarding can still reach it:
+
+```bash
+sudo iptables -I INPUT ! -i lo -p tcp --dport 6768 -j REJECT
+```
+
+An interactive iptables rule is not necessarily persistent after reboot. Use the host's firewall management to preserve the rule before enabling a runtime at boot. The setup below is intentionally started on demand rather than enabled at boot. Do not expose the runtime port directly to the public internet.
+
+## Configure the service
+
+Create private log and service directories on the remote host:
+
+```bash
+mkdir -p ~/.local/share/tailmux/orca/runtime ~/.config/systemd/user
+chmod 700 ~/.local/share/tailmux/orca/runtime
+```
+
+Save the following as `~/.config/systemd/user/tailmux-orca.service`. Replace the launcher path with your actual absolute path and select the laptop port for this box:
+
+```ini
+[Unit]
+Description=Orca serve for Tailmux
+
+[Service]
+Type=simple
+WorkingDirectory=%h
+Environment=LIBGL_ALWAYS_SOFTWARE=1
+ExecStart=/absolute/path/to/orca-ide serve --port 6768 --pairing-address ws://127.0.0.1:16768 --json
+StandardOutput=append:%h/.local/share/tailmux/orca/runtime/ready.log
+StandardError=append:%h/.local/share/tailmux/orca/runtime/error.log
+UMask=0077
+KillMode=mixed
+```
+
+Then run `systemctl --user daemon-reload`. `tailmux orca serve lab/worker` can now start the unit. This requires a working systemd user manager and the runtime dependencies on the host. Configure the unit's PATH if your agent CLIs or Xvfb are installed outside system paths.
+
+For your own supervisor, run the same `orca-ide serve ... --json` command and protect its stdout file. Pass its path with:
+
+```bash
+tailmux orca connect lab/worker --ready-file /private/path/to/ready.log
+```
+
+The default is `.local/share/tailmux/orca/runtime/ready.log`, relative to the remote SSH home directory. Pairing links grant access; do not publish the log or paste its contents into issue reports. Tailmux reads it through SSH without printing pairing credentials.
+
+## State and reconnection
+
+Orca owns pairing credentials. Tailmux writes only the environment ID, runtime ID, ports and ready-log path to `orca.json` in its local configuration directory. Pairing credentials are not copied into that file.
+
+`status` and `exec` recreate the saved local tunnel after `tailmux stop` or daemon restart, then verify the remote runtime ID. `tailmux orca connect` refreshes the route after a legitimate remote runtime restart. If the advertised laptop port changes, update the existing Orca environment through Orca's supported pairing flow before reconnecting; Tailmux does not silently overwrite a conflicting environment.
+
+Stopping Tailmux disconnects clients but leaves the remote runtime and its agents running. Stopping or restarting the **remote systemd service** terminates its managed processes. Tailmux does not restart services automatically or install a restart policy. Install and authenticate agent CLIs on the remote host; laptop provider credentials are not automatically transferred.
+
+## Troubleshooting
+
+- **No valid ready record:** inspect the remote service status and private error log. Confirm Xvfb, Electron libraries, `--json`, runtime pairing and a loopback advertised endpoint.
+- **Service not found:** provision `tailmux-orca.service`, or use `connect` with an independently managed runtime.
+- **Port already in use:** check `tailmux forwards` and the laptop's other listeners. Tailmux never silently remaps the advertised port.
+- **Runtime identity mismatch:** verify the selected host and use `connect` after a known service restart. Do not redirect the environment to an unrelated server.
+- **Agent unavailable:** install that agent on the remote machine and make its executable available in the service environment. A reachable Orca runtime does not imply a configured Codex or Claude account.

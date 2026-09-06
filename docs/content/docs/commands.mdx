@@ -40,6 +40,17 @@ Options follow the target. Omitted options retain the host's existing values, or
 
 See `tailmux help <command>` or `tailmux <command> --help` for CLI usage without opening a connection.
 
+## Orca runtimes
+
+| Command | Purpose |
+| --- | --- |
+| `tailmux orca serve <host>` | Start a preconfigured remote systemd user service and connect |
+| `tailmux orca connect <host> [--ready-file PATH]` | Pair an existing runtime and establish its SSH tunnel |
+| `tailmux orca status <host>` | Restore the tunnel if needed and verify the remote runtime |
+| `tailmux orca exec <host> -- <command...>` | Run an Orca CLI command against the selected runtime |
+
+`serve` also accepts `--ready-file`. This is native `orca serve` integration; runtime installation and firewall setup are prerequisites. See [Orca remote runtimes](/docs/orca).
+
 ## Terminal with a box picker
 
 ```bash

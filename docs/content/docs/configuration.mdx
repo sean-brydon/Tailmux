@@ -50,6 +50,8 @@ Forward groups are runtime state, not config entries. They are not automatically
 
 ```text
 config.json          Profiles, saved hosts and terminal backend preference
+orca.json            Non-secret Orca runtime routes
+orca.lock            Serializes Orca pairing and route updates
 daemon.sock          Private local control socket
 daemon.log           Runtime diagnostics
 config.lock          Serializes configuration changes

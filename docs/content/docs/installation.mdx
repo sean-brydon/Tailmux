@@ -75,6 +75,7 @@ The profile's state remains on disk, so an ordinary update reuses its existing T
 | SSH and forwarding | OpenSSH | SSH access; local forwarding permitted for tunnels |
 | `herdr attach` and `herdr sessions` | OpenSSH | Herdr on the SSH command PATH |
 | `herdr open` | OpenSSH and Herdr | Herdr on the SSH command PATH |
+| `orca` | OpenSSH and Orca CLI | Orca runtime, Xvfb/Electron dependencies, firewall; systemd user unit for `serve` |
 | `terminal` | OpenSSH, fzf, and tmux or Zellij | tmux on the SSH command PATH |
 
 Tailmux does not install these dependencies. The terminal integration has been tested with tmux 3.7c, Zellij 0.45.1 and fzf 0.74.3; it uses modern Zellij CLI features. Remote Zellij is not required. No remote Tailmux service is needed for forwarding.
