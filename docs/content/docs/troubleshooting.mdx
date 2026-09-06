@@ -1,0 +1,108 @@
+---
+title: Troubleshooting
+description: "Find which layer needs attention: account, connection, SSH, or session."
+icon: Activity
+---
+
+## Start with the connection
+
+```bash
+tailmux doctor personal/devbox
+tailmux ssh personal/devbox hostname
+```
+
+If the first fails, check tailnet login, device approval, policy, host availability, and the SSH port. If only the second fails, investigate SSH authentication.
+
+## Permission denied
+
+The remote user may differ from your local username. Save the correct one:
+
+```bash
+tailmux hosts add personal/devbox --user developer
+```
+
+Inspect `ssh -G devbox` to see the effective user, identity files, and agent configuration. With 1Password, confirm that its agent is available and that the host matches the appropriate SSH config block.
+
+## Too many authentication failures
+
+Select one public key with `IdentityFile` and `IdentitiesOnly yes` instead of offering every key in your agent. See [SSH & 1Password](/docs/ssh).
+
+## Herdr: command not found
+
+Herdr may be installed but missing from the non-interactive shell's `PATH`:
+
+```bash
+tailmux ssh personal/devbox sh -lc '"$HOME/.local/bin/herdr" --version'
+```
+
+If that succeeds, fix the remote shell's `PATH`. If it fails because the file is missing, install Herdr on the host.
+
+## Profile needs login
+
+```bash
+tailmux login personal
+```
+
+Check the reported tailnet. Ensure you opened the URL with the intended account. Work devices may need approval before they can reach peers.
+
+## Empty discovery after restart
+
+The node may still be receiving its peer map. Try `tailmux hosts` again. An empty list can also mean that the tailnet has no visible peers for this identity.
+
+## Daemon did not start
+
+Read `daemon.log` in your Tailmux config directory. If `TAILMUX_HOME` is very long, choose a shorter location before first enrollment. A second daemon cannot own an active state directory.
+
+After a binary update, run `tailmux stop` and retry. Do not delete state as a routine troubleshooting step.
+
+## Localhost redirects and forwarding
+
+Use an unnamed forward with the original port to preserve localhost URLs:
+
+```bash
+tailmux forward personal/devbox 3000
+```
+
+For named HTTP URLs, add `--name devbox.localhost`. Direct localhost redirects, JSON URLs and loopback cookie domains are rewritten by default. Rewrites cover only ports in that group; HTML/JavaScript, HTTPS URLs and external OAuth callback parameters are not rewritten. OAuth provider allowlists and Secure cookies can still require application or HTTPS setup. See [forwarding](/docs/forwarding).
+
+## Name does not resolve
+
+`.localhost` works in modern browsers. Other clients may need explicit resolution:
+
+```bash
+curl --resolve devbox.localhost:3000:127.0.0.1 http://devbox.localhost:3000
+```
+
+A custom name such as `devbox.local` needs a hosts-file or DNS entry pointing to `127.0.0.1`. Tailmux does not register mDNS names. Listeners use IPv4 loopback.
+
+## Port conflict, 421, or 502
+
+Check `tailmux forwards` for existing groups. Different HTTP names can share a port, but raw TCP forwarding reserves it exclusively. A range conflict rejects the entire new group. Stop a group with `tailmux unforward <id>`.
+
+HTTP 421 means the request's Host header does not match a named forward on that port; use its configured URL. HTTP 502 means the proxy could not reach the remote application. Confirm the app is listening on remote `127.0.0.1` at the mapped port and that SSH permits local forwarding. A running tunnel does not prove an app is listening.
+
+## Forward creation or reconnection fails
+
+Forward creation uses batch SSH authentication. Unlock your agent and verify `tailmux ssh <host> hostname`. Check host SSH forwarding policy. Failed tunnels appear in `tailmux forwards` and release their ports; remove the failed entry and create a new forward. `tailmux stop` removes all forwarding runtime state.
+
+## Box picker shortcut does nothing
+
+In Zellij, try **Ctrl+B** from normal mode or **F2** when unlocked. Press **Ctrl+G** to leave locked mode. In tmux, use **Ctrl+B, then B**. Option/Alt+B requires the terminal to send Meta/Alt rather than a special character or intercept the key.
+
+Reopen with `tailmux terminal` after upgrading to regenerate the dedicated configuration. Ensure fzf is installed locally. The picker needs profile discovery and may display `Loading boxes…` while a profile starts.
+
+## A tab uses only part of the terminal
+
+Another attached Zellij client may have a smaller terminal. Use `zellij list-sessions` to find the Tailmux session, then `zellij --session <session> action list-clients` to inspect clients. Detach unused views with **Ctrl+O, then D** in those views, and revisit the affected tab. Do not kill the server to fix a sizing issue.
+
+## Blue command path or square symbols
+
+The blue path is a Zellij pane title, not an error or remote output. Current Tailmux names new panes after their target and enables simplified UI to avoid missing arrow-font symbols. Reopen Tailmux after upgrading. Existing pane titles can be changed with Zellij's pane rename action; preserve **tab/window** names because they route new shells.
+
+## New splits connect to the wrong box or show the chooser
+
+Keep tab/window names equal to the full target, such as `personal/devbox`. The default-shell wrapper uses that name to choose the host. Changing it does not move an existing shell. Use the picker to create or select a correctly named host tab. Each pane has a separate persistent remote tmux shell; `tailmux herdr sessions` lists Herdr sessions only.
+
+## Closed tabs come back
+
+Earlier Tailmux versions automatically resurrected Zellij's last saved layout after its final tab closed. Update the binary and reopen with `tailmux terminal`. Current versions reattach to live sessions but discard exited snapshots before creating a fresh session. Detaching still preserves live tabs. This behavior is separate from `tailmux herdr sessions`, which lists remote Herdr processes.

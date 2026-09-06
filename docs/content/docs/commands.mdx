@@ -1,0 +1,101 @@
+---
+title: CLI reference
+description: The commands available in Tailmux today.
+icon: Terminal
+---
+
+Targets use `<profile>/<hostname>`. Optional short aliases are read from your configuration.
+
+## Account setup
+
+| Command | Purpose |
+| --- | --- |
+| `tailmux login <profile>` | Create or reuse a profile and sign in |
+| `tailmux init` | Create an empty config; optional and refuses to overwrite |
+| `tailmux hosts` | Discover visible peers across configured accounts |
+| `tailmux hosts add <profile/host>` | Save a host for SSH overrides and bulk operations |
+
+### Host options
+
+```bash
+tailmux hosts add lab/worker \
+  --user developer \
+  --address worker.example.ts.net \
+  --port 2222
+```
+
+Options follow the target. Omitted options retain the host's existing values, or default to the target hostname, port 22, and the SSH default user.
+
+## Connections
+
+| Command | Purpose |
+| --- | --- |
+| `tailmux doctor <host>` | Check connectivity to its SSH TCP port |
+| `tailmux doctor --all` | Check saved hosts; also the default for `doctor` |
+| `tailmux ssh <host> [command...]` | Open a shell or execute a remote command |
+| `tailmux herdr attach <host> [session]` | Attach to Herdr; session defaults to `agents` |
+| `tailmux herdr open [hosts...]` | Open one local Herdr view for saved or selected hosts |
+| `tailmux herdr sessions <host>` | Print a readable Herdr session table |
+| `tailmux herdr sessions --all` | Print session results for saved hosts; add `--json` for structured output |
+
+See `tailmux help <command>` or `tailmux <command> --help` for CLI usage without opening a connection.
+
+## Terminal with a box picker
+
+```bash
+tailmux terminal
+tailmux terminal --backend zellij lab/worker
+tailmux terminal --default tmux
+```
+
+`--backend tmux|zellij` overrides this launch; put options before the host. `--default tmux|zellij` saves the preference without launching. The initial default is tmux. Install fzf and the chosen backend locally, and tmux on remote hosts.
+
+**Alt+B** opens the box picker in either backend. Zellij also supports **Ctrl+B** in normal mode or **F2** when unlocked; tmux also accepts **Ctrl+B, B**. Splits in a host window/tab open independent persistent shells there. Detach with **Ctrl+B, D** in tmux or **Ctrl+O, D** in Zellij. Remote shells remain running.
+
+See the [terminal guide](/docs/terminal) for pane naming, locked mode and remote-session behavior.
+
+## Port forwarding
+
+```bash
+tailmux forward lab/worker 3000
+tailmux forward lab/worker 3000-3005 --name worker.localhost
+tailmux forward other/builder 3000-3005 --name builder.localhost
+tailmux forward lab/worker 8080:3000,9090:9000 --json
+tailmux forwards [--json]
+tailmux unforward <id>
+```
+
+Ports accept individual numbers, inclusive ranges, comma-separated lists and `local:remote` mappings, up to 100 ports per group. Options follow the host and may appear before or after ports.
+
+| Option | Purpose |
+| --- | --- |
+| `--name NAME` | Enable hostname-based HTTP routing; different names can share a port |
+| `--no-rewrite` | Disable redirect, JSON URL, cookie, Origin and Referer rewriting |
+| `--json` | Print the created forward as JSON, including its ID |
+
+Without a name, forwarding carries raw TCP to remote loopback. With a name, the HTTP proxy rewrites direct localhost redirects and JSON URLs for ports in the group, and removes loopback cookie domains while retaining security attributes. JSON rewriting is limited to 2 MiB. HTML, JavaScript, HTTPS URLs and external OAuth callback parameters are not rewritten. OAuth allowlists and application HTTPS requirements may still need configuration.
+
+All listeners bind to `127.0.0.1`. Modern browsers resolve `.localhost` to loopback. Custom names such as `worker.local` require DNS or a hosts-file entry (`127.0.0.1 worker.local`); Tailmux does not modify system DNS. Raw forwards cannot share a port. Port conflicts reject the new group without disturbing existing forwards.
+
+Forwards keep running after the CLI exits. `tailmux unforward <id>` stops one; `tailmux stop` stops all local networking. Forwards are not restored after daemon shutdown. SSH failures appear in `tailmux forwards`; recreate a failed forward to reconnect. SSH must permit local forwarding, and your agent must be unlocked for batch authentication.
+
+See the [forwarding guide](/docs/forwarding) for DNS setup, rewrite boundaries and lifecycle details.
+
+## Local runtime
+
+| Command | Purpose |
+| --- | --- |
+| `tailmux --version` | Print the installed version; source builds report `dev` |
+| `tailmux version` | Equivalent version command |
+| `tailmux help [command]` | Print help; also `tailmux <command> --help` |
+| `tailmux daemon` | Run the shared daemon in the foreground |
+| `tailmux stop` | Stop the local daemon and its transports |
+| `tailmux proxy <host>` | Internal SSH byte transport; not an interactive command |
+
+Errors return a nonzero exit code. Connection tests do not authenticate SSH. Bulk session listing reports per-host failures and exits nonzero if any host failed.
+
+The old top-level `attach` and `sessions` commands remain compatibility aliases. Session output is now a table by default; add `--json` in scripts that consume JSON.
+
+## Not implemented yet
+
+`ports` and `run` are proposed commands. They are not available in this version. See the [roadmap](/docs/roadmap).

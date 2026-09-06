@@ -1,0 +1,80 @@
+---
+title: Configuration
+description: Local settings, independent identities, and no secrets in your repository.
+icon: Settings2
+---
+
+## Where files live
+
+| Platform | Default directory |
+| --- | --- |
+| macOS | `~/Library/Application Support/tailmux` |
+| Linux | Usually `~/.config/tailmux`; respects `XDG_CONFIG_HOME` |
+
+Override the directory with `TAILMUX_HOME`. Use a short, private path because Unix socket paths have a length limit.
+
+```bash
+export TAILMUX_HOME="$HOME/.tailmux"
+```
+
+Changing this directory selects a different set of profiles and identities. Do not change it casually after logging in.
+
+## Config file
+
+```json title="config.json"
+{
+  "terminal_backend": "zellij",
+  "profiles": ["personal", "work"],
+  "hosts": {
+    "personal/devbox": {
+      "profile": "personal",
+      "address": "devbox",
+      "user": "developer",
+      "port": 22
+    }
+  }
+}
+```
+
+The default configuration is empty. `login` adds profiles; `hosts add` saves machines. Host changes take effect on subsequent requests.
+
+## Terminal preference
+
+`terminal_backend` is optional. Without it, `tailmux terminal` uses tmux. Save a preference with `tailmux terminal --default tmux` or `tailmux terminal --default zellij`; this does not open a terminal. `--backend` overrides one launch without changing the saved preference. Put terminal flags before the host.
+
+Generated multiplexer settings belong to Tailmux's dedicated session. Zellij's generated file is rewritten on launch; editing it is not a persistent customization interface. Existing remote shells retain their running wrapper until restarted.
+
+Forward groups are runtime state, not config entries. They are not automatically restored after daemon shutdown. Custom forwarding names do not change system DNS.
+
+## Directory contents
+
+```text
+config.json          Profiles, saved hosts and terminal backend preference
+daemon.sock          Private local control socket
+daemon.log           Runtime diagnostics
+config.lock          Serializes configuration changes
+daemon.lock          Prevents duplicate daemons
+terminal/
+  zellij.kdl         Generated local Zellij configuration
+  zellij-shell       Default-shell wrapper for remote panes
+state/
+  personal/          Persistent tsnet identity
+  work/              Separate tsnet identity
+```
+
+Treat the state directory as private. Do not commit it or copy it between machines while an identity is active.
+
+## SSH settings
+
+Key selection, 1Password agent paths, and ordinary SSH options belong in `~/.ssh/config`. Tailmux's host configuration provides only the profile, destination address, user, and port.
+
+## Stopping and restarting
+
+```bash
+tailmux stop
+tailmux doctor personal/devbox
+```
+
+The second command starts a new daemon automatically. A stop closes active local transports but preserves the identity files. Herdr and dedicated tmux shells continue on remote hosts. Active forwards stop and must be recreated.
+
+Zellij reuses a **running** local session when you detach. Closing a tab with Ctrl+T, then X removes it. After closing the last tab, the next `tailmux terminal` starts a fresh session. Tailmux disables disk-layout resurrection so previously closed tabs cannot return from an old snapshot. Remote tmux shells remain on their hosts; this does not stop remote processes.

@@ -1,0 +1,76 @@
+---
+title: Persistent sessions
+description: Close the connection. Keep the work.
+icon: Layers
+---
+
+This page covers Herdr sessions (`herdr attach` and `herdr sessions`). For persistent remote tmux shells in either local multiplexer, see [terminal & box picker](/docs/terminal). `tailmux herdr sessions` does not enumerate those tmux shells.
+
+## Install Herdr on the host
+
+Tailmux handles transport; Herdr owns the remote terminal processes. Install Herdr for your remote user using its [official installer](https://herdr.dev/docs/install/):
+
+```bash
+curl -fsSL https://herdr.dev/install.sh -o /tmp/install-herdr.sh
+sh /tmp/install-herdr.sh
+```
+
+Herdr installs to `~/.local/bin` by default. Make that directory available to your SSH shell. For Bash, a `PATH` export in `.bashrc` needs to appear before an early return for non-interactive shells. For Zsh, `.zshenv` is read for non-interactive shells too.
+
+Verify from your laptop:
+
+```bash
+tailmux ssh personal/devbox herdr --version
+```
+
+## Attach and detach
+
+```bash
+tailmux herdr attach personal/devbox
+```
+
+The default named session is `agents`. Choose a different one with a second argument:
+
+```bash
+tailmux herdr attach personal/devbox review
+```
+
+Press **Ctrl+B, then Q** to detach. Closing this connection does not stop the Herdr server. Repeating the attach command reconnects to the same session.
+
+## View multiple hosts together
+
+Use `tailmux herdr open` for one local Herdr interface containing a workspace per saved host. See [one view, multiple boxes](/docs/herdr) for setup and navigation.
+
+## Check what is running
+
+```bash
+tailmux herdr sessions personal/devbox
+tailmux herdr sessions --all
+```
+
+`--all` shows a table for saved hosts and reports errors per host. Add `--json` for the machine-readable response grouped by host. It uses non-interactive SSH authentication, so authorize your agent and establish access with `ssh` or `attach` first if needed.
+
+## Try persistence yourself
+
+In a Herdr shell, run:
+
+```bash
+export SESSION_MARKER=hello-again
+printf 'Shell PID: %s\n' "$$"
+sleep 15
+printf 'Finished: %s\n' "$SESSION_MARKER"
+```
+
+Detach during the sleep, reconnect, and check the output. The same shell and variable should remain.
+
+## What survives?
+
+| Event | Outcome |
+| --- | --- |
+| Detach the terminal | Herdr processes keep running |
+| Laptop loses its connection | Reconnect to the remote session |
+| Run `tailmux stop` | Local transports close; Herdr stays on the host |
+| Stop the Herdr server | Its pane processes exit |
+| Reboot the host | Running processes stop; this is not live process migration |
+
+The current Tailmux attach mode runs Herdr inside SSH. It does not provide the local clipboard bridge offered by Herdr's own thin-client remote mode.

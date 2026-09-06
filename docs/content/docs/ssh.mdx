@@ -1,0 +1,66 @@
+---
+title: SSH & 1Password
+description: Use your existing keys. Give each host the right identity.
+icon: KeyRound
+---
+
+## How the connection works
+
+Tailmux creates an OpenSSH `ProxyCommand` that dials the host through the selected tsnet profile. Your SSH client still reads `~/.ssh/config` and uses your existing authentication agent.
+
+```bash
+tailmux ssh personal/devbox
+tailmux ssh work/buildbox hostname
+```
+
+The SSH config match uses the host's configured **address**, such as `devbox`, rather than the full `personal/devbox` target.
+
+## Set the remote user
+
+By default, OpenSSH chooses the user from your SSH config or local username. Override it explicitly when necessary:
+
+```bash
+tailmux hosts add personal/devbox --user developer
+```
+
+## Use the 1Password agent
+
+Configure an `IdentityAgent` for each host. On macOS, a typical setup is:
+
+```text title="~/.ssh/config"
+Host devbox
+  User developer
+  IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+  IdentityFile ~/.ssh/devbox.pub
+  IdentitiesOnly yes
+```
+
+Use the agent socket path provided by your 1Password installation. Save the **public key** corresponding to the key in 1Password at `~/.ssh/devbox.pub`. The private key stays in 1Password.
+
+<Callout title="Why select a key?">
+An agent may contain more keys than a server permits authentication attempts. `IdentityFile` plus `IdentitiesOnly yes` selects the right agent key and avoids “Too many authentication failures.” An `IdentityAgent` under an old SSH alias does not automatically apply to a different hostname.
+</Callout>
+
+Check the effective settings:
+
+```bash
+ssh -G devbox
+```
+
+## Remote commands are literal arguments
+
+Tailmux quotes each remote command argument. Invoke a shell explicitly when you need pipes, redirects, or compound commands:
+
+```bash
+tailmux ssh personal/devbox sh -lc 'cd ~/project && git status'
+```
+
+## Host keys
+
+Host-key aliases are scoped to the profile and address. OpenSSH uses `StrictHostKeyChecking=accept-new`: it saves first-seen keys and rejects changed ones. This is trust on first use, not independent verification of a new key.
+
+Connection multiplexing is disabled so an existing SSH connection cannot bypass profile selection. Tailmux does not enable agent forwarding; any forwarding configured in your own SSH config remains your responsibility.
+
+## SSH-backed port forwards
+
+`tailmux forward` uses these same host, key and agent settings. It authenticates in batch mode and opens SSH local forwards to remote `127.0.0.1`, so unlock your agent first and ensure the host permits local forwarding. No remote Tailmux helper is required. A successful SSH login alone does not confirm forwarding permission or that the application port is listening. See [forwarding](/docs/forwarding).

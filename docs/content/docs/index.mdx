@@ -1,0 +1,40 @@
+---
+title: Your machines. One command away.
+description: Connect to development boxes across separate Tailscale accounts. Keep your sessions running, and your networks separate.
+icon: BookOpen
+---
+
+<ConnectionMap />
+
+Tailmux is a small Go CLI that brings your remote development machines into one workflow. Give each Tailscale account a name, choose a host, and connect using the SSH keys you already trust.
+
+## Start here
+
+<Cards>
+<Card title="Install Tailmux" href="/docs/installation" description="One binary. macOS or Linux. No root required." />
+<Card title="Make your first connection" href="/docs/quickstart" description="From a named profile to a remote shell in a few commands." />
+</Cards>
+
+## A profile, a host, a session
+
+<Terminal title="Your first session" code={'tailmux login personal\ntailmux hosts\ntailmux herdr attach personal/devbox'} />
+
+The names are yours. `personal` could be `work`, `lab`, or a client name. `devbox` is a hostname visible inside that account. There are no built-in accounts or machines.
+
+## A little less switching
+
+**Keep both accounts connected.** Each profile has an independent embedded Tailscale node. Your system Tailscale connection keeps doing its thing.
+
+**Use familiar SSH.** Tailmux transports the connection; OpenSSH handles your user, keys, and agent. That includes 1Password.
+
+**Bring your boxes together.** Use `tailmux herdr open` for a local Herdr view with one workspace per host. [Explore the combined view](/docs/herdr).
+
+**Pick a box from your terminal.** Use `tailmux terminal` with tmux or Zellij and a saved backend preference. [Terminal & box picker](/docs/terminal).
+
+**Open remote apps locally.** Forward a port or range to localhost, or use named HTTP URLs with redirect rewriting. [Port forwarding & local URLs](/docs/forwarding).
+
+**Leave work running.** Attach to Herdr on a remote machine, detach, then pick up the same shell later. Your processes stay on the host.
+
+<Callout title="Early development">
+Connection management, Herdr attachment, tmux/Zellij terminals, and port forwarding work today. Process picking and task dispatch are planned. The [roadmap](/docs/roadmap) keeps that distinction explicit.
+</Callout>

@@ -1,0 +1,57 @@
+---
+title: One view, multiple boxes
+description: Put your remote machines in the same local Herdr sidebar.
+icon: Layers
+---
+
+For a regular tmux or Zellij interface with a fuzzy host picker, use [tailmux terminal](/docs/terminal). This page covers the separate Herdr integration.
+
+## Open a combined view
+
+Install Herdr locally as well as on your remote hosts, then run:
+
+```bash
+tailmux herdr open personal/devbox work/buildbox
+```
+
+Tailmux opens a local Herdr session named `tailmux`, with a workspace for each selected host. Each workspace connects to that machine's remote `agents` session.
+
+If you have already saved your usual machines, omit the targets:
+
+```bash
+tailmux herdr open
+```
+
+## Switch between machines
+
+Use **Ctrl+B, then W** in the local Herdr view to choose a workspace. Each workspace is labeled with its full `profile/host` target.
+
+The view is shared, but execution stays on the selected remote machine. Switching workspaces does not move code or a running process between boxes.
+
+## Reconnect
+
+If a remote connection ends, its workspace offers a reconnect prompt. Press **Enter** to reconnect or type **q** to return to the local shell. Opening the combined view again reuses existing host workspaces.
+
+## How this differs from attach
+
+| Command | Opens |
+| --- | --- |
+| `tailmux herdr attach personal/devbox` | One remote Herdr session directly |
+| `tailmux terminal` | Local tmux or Zellij with a box picker and persistent remote tmux shells |
+| `tailmux herdr open` | One local Herdr view containing connections to saved hosts |
+
+The combined view nests remote Herdr inside local Herdr. **Ctrl+B, then Q** detaches the local view. The remote sessions remain hosted on their respective machines.
+
+This is a shared terminal interface, not yet a combined agent scheduler or cross-host filesystem.
+
+## Herdr command group
+
+```bash
+tailmux herdr attach lab/worker
+tailmux herdr sessions lab/worker
+tailmux herdr sessions --all
+tailmux herdr sessions --all --json
+tailmux herdr open
+```
+
+Session lists show host, session name and running/stopped status by default. `--json` retains structured output for scripts. These commands manage Herdr, not the local Zellij/tmux tabs opened by `tailmux terminal`. The old top-level `tailmux attach` and `tailmux sessions` remain compatibility aliases. Scripts expecting the old JSON output must add `--json`.

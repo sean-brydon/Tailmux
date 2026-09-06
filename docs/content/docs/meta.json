@@ -1,0 +1,23 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "---Get started---",
+    "index",
+    "installation",
+    "quickstart",
+    "---Use Tailmux---",
+    "profiles",
+    "ssh",
+    "sessions",
+    "herdr",
+    "terminal",
+    "forwarding",
+    "---Reference---",
+    "commands",
+    "configuration",
+    "troubleshooting",
+    "---Project---",
+    "releases",
+    "roadmap"
+  ]
+}

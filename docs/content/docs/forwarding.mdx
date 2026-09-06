@@ -1,0 +1,38 @@
+---
+title: Port forwarding & local URLs
+description: Reach remote loopback services through localhost or a custom name.
+icon: Network
+---
+
+
+```sh
+tailmux forward personal/devbox 3000             # localhost:3000 → remote localhost:3000
+tailmux forward personal/devbox 3000-3010        # inclusive range (up to 100 ports)
+tailmux forward personal/devbox 8080:3000        # local:remote mapping
+tailmux forward personal/devbox 3000-3005 --name devbox.localhost
+tailmux forward work/buildbox 3000-3005 --name buildbox.localhost
+tailmux forwards                                # IDs, routes and status
+tailmux forwards --json
+tailmux unforward <id>
+```
+
+Without `--name`, forwarding carries arbitrary TCP unchanged over SSH to the remote machine's loopback interface. Using the same local and remote port preserves `localhost` URLs, including OAuth callbacks registered for localhost. Local listeners bind only to `127.0.0.1`; they are not exposed on your LAN. SSH must allow local forwarding; no Tailmux installation or additional service is needed remotely.
+
+With `--name`, Tailmux runs an HTTP reverse proxy. Different names can share the same local port across boxes. Open `http://devbox.localhost:3000` in your browser. Modern browsers resolve `.localhost` names to loopback; other clients may need explicit resolution (for example, curl's `--resolve devbox.localhost:3000:127.0.0.1`). Custom names such as `devbox.local` or `dev.example.test` work when your resolver maps them to `127.0.0.1`. Add `127.0.0.1 devbox.local` to `/etc/hosts` or configure your local DNS; Tailmux does not change system DNS. `.local` otherwise belongs to multicast DNS and is not automatically registered by Tailmux.
+
+Named forwards rewrite HTTP `Location`, `Content-Location` and `Refresh` redirects pointing directly to localhost, 127.0.0.1 or ::1 on ports in that forward group. JSON URL strings are also rewritten, covering common authentication responses, with a 2 MiB buffering limit. Loopback cookie domains are removed to make cookies host-only; Secure, HttpOnly and SameSite attributes are preserved. Requests use the upstream localhost Host header; matching Origin and Referer URLs are translated back. WebSocket upgrades and streaming responses use Go's reverse proxy. Use `--no-rewrite` to disable response, Origin and Referer rewriting.
+
+This does not rewrite HTML/JavaScript, external URLs containing OAuth `redirect_uri` parameters, or HTTPS URLs. OAuth provider callback allowlists, HTTPS requirements and application origin validation may still require configuration. For a strict localhost-only login flow, use the unnamed forward with the original port. Named mode serves HTTP; use raw TCP for end-to-end TLS or non-HTTP protocols. Two raw forwards cannot own the same local port. Unknown HTTP hostnames are rejected.
+
+Forwards run in the local daemon after the CLI exits. They stop with `unforward`, `tailmux stop`, or daemon shutdown; they are not automatically restored. SSH failures appear in `forwards` and release the ports; recreate the forward to reconnect. Port ranges are reserved together: a conflict rejects the new group without disturbing existing forwards. Each group uses one SSH connection and private temporary Unix sockets. Forward creation uses your existing SSH configuration and agent in batch mode, so unlock the agent first. Automatic process selection is not yet implemented.
+
+## Inspect and stop a forward
+
+`tailmux forward ... --json` returns an array with the created group's `id`, `spec`, and `state`. `tailmux forwards --json` lists groups, including failed ones. Use the returned ID with `tailmux unforward <id>`; the whole group, including every port in its range, is stopped.
+
+```bash
+tailmux forward lab/worker 3000 --name worker.localhost --json
+tailmux forwards --json
+```
+
+Options follow the host and may appear before or after port arguments. There is no automatic process picker or port discovery yet.

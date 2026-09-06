@@ -1,0 +1,54 @@
+---
+title: Releases & development
+description: Build the CLI, maintain the docs, and publish versioned downloads.
+icon: GitBranch
+---
+
+## Verify a change
+
+```bash
+go test -race ./...
+go vet ./...
+python3 scripts/test-installer.py
+python3 scripts/check-docs.py
+```
+
+## Build release assets locally
+
+```bash
+./scripts/build-release.sh v0.1.0
+```
+
+This produces four archives, the installer, and `checksums.txt` in `dist/`. The version is embedded in each binary and printed by `tailmux --version`.
+
+## Publish a release
+
+The GitHub Actions release workflow runs when a version tag is pushed. It tests the CLI and installer, cross-compiles macOS and Linux binaries, and publishes the assets to GitHub Releases.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Use those commands only when you intend to publish that version. The first published release makes the installer's `releases/latest/download/install.sh` URL available. Merely adding the workflow does not publish a release.
+
+## Work on this documentation
+
+The docs use Fumadocs, Next.js, and MDX. Content lives in `docs/content/docs`; navigation is in its `meta.json`. When CLI behavior changes, update the README, CLI help, command reference, workflow guides and troubleshooting together. `scripts/check-docs.py` checks command coverage, but does not verify that explanations match implementation.
+
+```bash
+cd docs
+npm ci
+npm run dev
+```
+
+The preview runs at `http://127.0.0.1:4310`.
+
+```bash
+npm run build
+npm run typecheck
+```
+
+The static site is exported to `docs/out`. It can be hosted without a Node.js server. Built-in search downloads a static index and runs in the browser.
+
+For hosting below a path such as `/Tailmux`, set `DOCS_BASE_PATH=/Tailmux` when building. A manual GitHub Pages workflow is included; enable Pages with GitHub Actions before running it.

@@ -1,0 +1,45 @@
+---
+title: Accounts & profiles
+description: Give every tailnet its own name and identity.
+icon: Network
+---
+
+## Profiles are local labels
+
+A profile is a name you choose for an embedded Tailscale node. There is no special meaning to `personal` or `work`:
+
+```bash
+tailmux login lab
+tailmux login client-project
+tailmux ssh lab/worker
+```
+
+Profile names start with a letter or digit and may contain letters, digits, hyphens, and underscores, up to 63 characters.
+
+## One process, independent identities
+
+The local Tailmux daemon owns one `tsnet.Server` per active profile. Each stores its identity in a separate `state/<profile>` directory.
+
+<ConnectionMap />
+
+Connections for a target use that profile's network stack. Tailmux does not route traffic between the accounts or require your remote machines to join both networks.
+
+Terminal connections and port-forwarding tunnels use the same selected profile and SSH settings. Local named HTTP routes can reach hosts in separate tailnets without joining those networks together.
+
+The daemon starts on demand and shares a profile across simultaneous CLI commands and terminals. A local process lock prevents two daemons from taking ownership of the same state directory.
+
+## Discovery and access
+
+`tailmux hosts` shows peers visible to each connected profile. Visibility does not guarantee SSH access: the tailnet policy, the host's SSH service, and your SSH user authentication still apply.
+
+If a work account requires device approval, enroll the Tailmux node through your organization's normal process.
+
+## Persistent state
+
+Keep your state directory when rebuilding or upgrading. Removing it can create a new node on the next login, leaving the previous node registered in Tailscale.
+
+Tailmux currently has no profile-removal command. If you retire a profile, stop its use and remove the obsolete node through the Tailscale admin console before discarding its state. Do not delete a host you still use.
+
+<Callout title="Explicit account enrollment">
+Tailmux ignores ambient Tailscale auth-key and OAuth credential environment variables. Each profile uses its own explicit login, avoiding accidental enrollment of every profile into the same account.
+</Callout>

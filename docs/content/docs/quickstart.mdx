@@ -1,0 +1,105 @@
+---
+title: Your first connection
+description: Name your account. Find your machine. Open a shell.
+icon: Terminal
+---
+
+<Steps>
+<Step>
+## Sign into an account
+
+```bash
+tailmux login personal
+```
+
+Open the printed URL and sign into the intended Tailscale account. Tailmux registers a node named `tailmux-personal` and prints the connected tailnet. Check that name before continuing.
+
+`login` creates your config automatically. There is no separate initialization step.
+</Step>
+<Step>
+## Add another account
+
+```bash
+tailmux login work
+```
+
+Choose your work account in the browser. Both identities can stay connected at once; neither changes your system Tailscale login.
+</Step>
+<Step>
+## Discover your hosts
+
+```bash
+tailmux hosts
+```
+
+The list shows visible peers, their profile, address, and online state. A target looks like `personal/devbox` or `work/buildbox`. These are examples; use your actual hostnames.
+</Step>
+<Step>
+## Check the connection
+
+```bash
+tailmux doctor personal/devbox
+tailmux ssh personal/devbox hostname
+```
+
+`doctor` checks the host's SSH TCP port. The second command verifies SSH authentication by running `hostname` remotely.
+</Step>
+<Step>
+## Keep a session running
+
+With Herdr installed on the remote host:
+
+```bash
+tailmux herdr attach personal/devbox
+```
+
+Detach with **Ctrl+B, then Q**. Run the same command to reconnect to the `agents` session.
+</Step>
+</Steps>
+
+## Save your usual machines
+
+Direct connections do not need saved host entries. Save one when you want SSH overrides or want it included in `--all` operations:
+
+```bash
+tailmux hosts add personal/devbox --user developer
+tailmux hosts add work/buildbox --user developer
+tailmux doctor --all
+tailmux herdr sessions --all
+```
+
+The last command lists sessions on saved hosts. It does not attempt SSH connections to every peer on your tailnets.
+
+## Open a terminal with a box picker
+
+Install fzf and tmux or Zellij locally, plus tmux remotely:
+
+```bash
+tailmux terminal personal/devbox
+tailmux terminal --backend zellij work/buildbox
+tailmux terminal --default zellij
+```
+
+The last command saves a default without launching. Alt+B opens the picker; Zellij also supports Ctrl+B in normal mode or F2 when unlocked. With tmux, Ctrl+B then B also opens it. See [terminal shortcuts and persistence](/docs/terminal).
+
+## Open your remote development server
+
+With an application listening on remote port 3000:
+
+```bash
+tailmux forward personal/devbox 3000 --name devbox.localhost
+tailmux forward work/buildbox 3000 --name buildbox.localhost
+tailmux forwards
+```
+
+Open `http://devbox.localhost:3000` or `http://buildbox.localhost:3000`. Names share the same local port. Omit `--name` for raw TCP at `localhost:3000`; use `3000-3005` for a range. Custom `.local` names need a loopback DNS or hosts-file entry. Named mode rewrites direct localhost redirects, but OAuth callback allowlists and HTTPS requirements may still need application configuration. Stop a group with `tailmux unforward <id>`. See [forwarding](/docs/forwarding).
+
+## Bring both boxes into one Herdr view
+
+With Herdr installed locally and remotely:
+
+```bash
+tailmux herdr open personal/devbox work/buildbox
+```
+
+Use the local Herdr workspace picker to switch machines. See [one view, multiple boxes](/docs/herdr).
