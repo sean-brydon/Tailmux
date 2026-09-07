@@ -1,8 +1,21 @@
 # Tailmux
 
-A Go CLI for reaching development machines across separate Tailscale accounts with persistent terminals, a cross-host box picker, and local port forwarding.
+A Go CLI and interactive dashboard for development machines across separate Tailscale accounts: persistent terminals, saved port forwards, public preview URLs and remote agent runtimes.
 
 Profile names and hostnames are supplied at runtime. Each profile gets its own embedded Tailscale (`tsnet`) node and private state directory. Your system Tailscale connection stays independent.
+
+## Dashboard
+
+```bash
+tailmux                  # interactive control centre
+tailmux status --json    # scriptable, read-only snapshot
+```
+
+The default **0 Monitor** panel shows RAM meters, Orca/Herdr session status, reported unread updates and available Codex account quotas and opt-in Claude telemetry for saved boxes. Limits belong to the default CLI account and may be shared across boxes; unsupported attention and quota data are marked unavailable. Use `tailmux monitor --json` for a one-shot report.
+
+A Charm-powered dashboard brings boxes, forwards, Orca routes and setup into one terminal. Press Enter to open a box in tmux/Zellij, `p` to select a remote port, `f` to configure a saved/public forward, `c` to check host setup, or `a` to add an account. `n` starts networking and saved forwards; quitting leaves existing sessions running. See [dashboard controls](docs/content/docs/dashboard.mdx).
+
+Bare `tailmux` prints help when input/output is redirected. `tailmux dashboard` requires an interactive terminal.
 
 ## Build
 
@@ -63,6 +76,14 @@ Use `tailmux hosts add <profile>/<hostname> --user <user> --port <port>` to save
 | `orca exec <host> -- <command...>` | Run native Orca CLI commands on that runtime |
 | `terminal [--backend tmux\|zellij] [host]` | Open the terminal box picker |
 | `terminal --default tmux\|zellij` | Save backend preference without launching |
+| `dashboard` / bare `tailmux` | Open the interactive control centre |
+| `status [--json]` | Inspect boxes, forwards, runtime routes and tools |
+| `ports <host> [--json\|--pick\|--forward]` | Discover/select remote TCP ports and processes |
+| `setup check <host\|--all> [--json]` | Check remote prerequisites |
+| `setup install <host> --tmux --ports` | Explicitly install selected prerequisites |
+| `setup orca <host> [--apply]` | Review/configure an Orca user service |
+| `loopback setup <host> [--name NAME]` | Assign a private hostname and isolated loopback address |
+| `loopback list` | List configured box hostnames and addresses |
 | `forward <host> <ports...> [--name NAME] [--no-rewrite] [--json]` | Forward TCP or serve a named HTTP route |
 | `forwards [--json]` | List forwarding groups and status |
 | `unforward <id>` | Stop one forwarding group |
@@ -92,7 +113,7 @@ The daemon starts on demand and owns the tsnet nodes so concurrent terminals can
 
 The profiles do not forward traffic between tailnets. Ambient Tailscale auth-key and OAuth environment variables are ignored; login is explicit per profile. State and the local socket live in a private directory outside the repository. SSH host-key aliases are scoped to profile and destination, and connection multiplexing is disabled so an existing SSH connection cannot bypass profile selection. OpenSSH uses `StrictHostKeyChecking=accept-new`: first-seen host keys are saved under the profile-specific alias, and changed keys are rejected. This is trust on first use; it does not independently verify a new host key.
 
-Stopping the daemon closes local SSH connections and stops forwards, which are not automatically restored. Remote Herdr sessions continue, but ordinary nonpersistent SSH commands may terminate when disconnected.
+Stopping the daemon closes local SSH connections and stops forwards. Groups created with `--save NAME` restore when the daemon next starts; temporary groups do not. Remote Herdr sessions continue, but ordinary nonpersistent SSH commands may terminate when disconnected.
 
 ## Testing
 
@@ -137,11 +158,6 @@ Default keys with nested Herdr sessions:
 
 These are nested terminal interfaces. The outer sidebar lists hosts; the inner sidebar lists that host's remote workspaces and agents. A combined cross-host agent list is not implemented yet. Custom Herdr keybindings may differ from the defaults above.
 
-### Public preview URLs
-
-Cloudflare and ngrok can publish a specific raw forward, for example `tailmux forward personal/devbox 13000:3000`. Cloudflare named tunnels provide a stable custom hostname; ngrok supports an assigned account domain. Quick Cloudflare tunnels use temporary URLs. See the [public URL guide](docs/content/docs/forwarding.mdx#public-urls-with-cloudflare-or-ngrok) for setup, redirect limitations and cleanup.
-
-The proposed `--cloudflare` and `--ngrok` flags are not implemented yet; use the provider CLI alongside Tailmux. A stable hostname still requires the app, forward and connector to stay running.
 
 ## Documentation site
 
@@ -203,9 +219,9 @@ Install `fzf` and your chosen multiplexer locally. This integration is tested wi
 
 **Alt+B** opens a fuzzy box picker in either backend. Zellij also supports **Ctrl+B** in normal mode or **F2** when unlocked; these avoid terminals that do not send Option/Alt as Meta. With tmux, **Ctrl+B, B** also opens it. Search visible machines across your profiles and press Enter to connect or switch to an existing host window/tab. Offline machines are labeled; reachability and SSH permissions still determine whether a connection can succeed. The initial home pane also offers Enter to open the picker.
 
-New split panes inside a host window/tab connect to that same host, each with its own persistent remote shell. A new unnamed Zellij tab shows the box chooser rather than a local shell. Keep host window/tab names unchanged: those names determine which host new panes connect to. Invalid or unrecognized names return to the chooser.
+New split panes inside a host window/tab connect to that same host, each with its own persistent remote shell. A new unnamed Zellij tab shows the box chooser rather than a local shell. Host and local windows/tabs can be renamed freely: Tailmux keeps their canonical route separately, so new panes and picker selection still use the right machine. Invalid or unrecognized tabs return to the chooser.
 
-Each configuration directory gets its own local tmux socket/Zellij session. Tailmux writes its generated Zellij configuration under `TAILMUX_HOME/terminal/` and does not modify your normal multiplexer config. Reopening reuses the same local session. The picker does not stop or migrate processes when you switch boxes.
+Each configuration directory gets its own local tmux socket/Zellij session. Tailmux writes its generated Zellij configuration and private routing metadata under `TAILMUX_HOME/terminal/` and does not modify your normal multiplexer config. Reopening reuses the same local session. The picker does not stop or migrate processes when you switch boxes.
 
 Remote shells run on a dedicated tmux server named `tailmux`, with its status bar hidden and **Ctrl+A** as its prefix. Your existing remote tmux sessions/configuration and Herdr sessions remain independent. Disconnecting shows a prompt: Enter reconnects to the same remote shell, while `q` closes the local pane. Closing local panes leaves their remote sessions available; they are not automatically deleted. This first version does not provide a remote-session cleanup browser.
 
@@ -217,22 +233,54 @@ Detach the local view with **Ctrl+B, D** in tmux or **Ctrl+O, D** in Zellij. Rea
 tailmux forward personal/devbox 3000             # localhost:3000 → remote localhost:3000
 tailmux forward personal/devbox 3000-3010        # inclusive range (up to 100 ports)
 tailmux forward personal/devbox 8080:3000        # local:remote mapping
-tailmux forward personal/devbox 3000-3005 --name devbox.localhost
-tailmux forward work/buildbox 3000-3005 --name buildbox.localhost
+tailmux loopback setup personal/devbox            # configures devbox.test
+tailmux loopback setup work/buildbox              # configures buildbox.test
+tailmux forward personal/devbox 3000-3005 --name devbox.test
+tailmux forward work/buildbox 3000-3005 --name buildbox.test
 tailmux forwards                                # IDs, routes and status
 tailmux forwards --json
 tailmux unforward <id>
 ```
 
-Without `--name`, forwarding carries arbitrary TCP unchanged over SSH to the remote machine's loopback interface. Using the same local and remote port preserves `localhost` URLs, including OAuth callbacks registered for localhost. Local listeners bind only to `127.0.0.1`; they are not exposed on your LAN. SSH must allow local forwarding; no Tailmux installation or additional service is needed remotely.
+Without `--name`, forwarding carries arbitrary TCP unchanged over SSH to the remote machine's loopback interface. Using the same local and remote port preserves `localhost` URLs, including OAuth callbacks registered for localhost. Raw TCP listeners bind only to `127.0.0.1`; they are not exposed on your LAN. SSH must allow local forwarding; no Tailmux installation or additional service is needed remotely.
 
-With `--name`, Tailmux runs an HTTP reverse proxy. Different names can share the same local port across boxes. Open `http://devbox.localhost:3000` in your browser. Modern browsers resolve `.localhost` names to loopback; other clients may need explicit resolution (for example, curl's `--resolve devbox.localhost:3000:127.0.0.1`). Custom names such as `devbox.local` or `dev.example.test` work when your resolver maps them to `127.0.0.1`. Add `127.0.0.1 devbox.local` to `/etc/hosts` or configure your local DNS; Tailmux does not change system DNS. `.local` otherwise belongs to multicast DNS and is not automatically registered by Tailmux.
+With `--name`, Tailmux runs an HTTP reverse proxy on a dedicated `127.77.x.y` address for that canonical box. Run `tailmux loopback setup <host>` first; it uses `<host>.test` by default, updates this machine's `/etc/hosts`, and configures the local loopback alias. Different boxes can then use the same port without colliding: open `http://devbox.test:3000` and `http://buildbox.test:3000`. Use `tailmux loopback list` to inspect assignments. `.localhost` names are rejected because browsers force them to `127.0.0.1`, bypassing per-box isolation.
+
+Loopback setup changes only your local computer; it does not modify the remote host. It needs administrator access and, on macOS, the address alias does not survive reboot. Rerun the same setup command before resuming named forwards; Tailmux does not install a persistent LaunchDaemon. A non-Tailmux process listening on `0.0.0.0:<port>` can still conflict because a wildcard listener covers every local address. Raw TCP and managed public forwards retain `127.0.0.1` bindings.
 
 Named forwards rewrite HTTP `Location`, `Content-Location` and `Refresh` redirects pointing directly to localhost, 127.0.0.1 or ::1 on ports in that forward group. JSON URL strings are also rewritten, covering common authentication responses, with a 2 MiB buffering limit. Loopback cookie domains are removed to make cookies host-only; Secure, HttpOnly and SameSite attributes are preserved. Requests use the upstream localhost Host header; matching Origin and Referer URLs are translated back. WebSocket upgrades and streaming responses use Go's reverse proxy. Use `--no-rewrite` to disable response, Origin and Referer rewriting.
 
-This does not rewrite HTML/JavaScript, external URLs containing OAuth `redirect_uri` parameters, or HTTPS URLs. OAuth provider callback allowlists, HTTPS requirements and application origin validation may still require configuration. For a strict localhost-only login flow, use the unnamed forward with the original port. Named mode serves HTTP; use raw TCP for end-to-end TLS or non-HTTP protocols. Two raw forwards cannot own the same local port. Unknown HTTP hostnames are rejected.
+This does not rewrite HTML/JavaScript, external URLs containing OAuth `redirect_uri` parameters, or HTTPS URLs. OAuth provider callback allowlists, HTTPS requirements and application origin validation may still require configuration. Unlike `localhost`, a `.test` HTTP origin is not automatically a secure context; Secure cookies, service workers and OAuth flows may need HTTPS, a public URL, or application settings. For a strict localhost-only login flow, use the unnamed forward with the original port. Named mode serves HTTP; use raw TCP for end-to-end TLS or non-HTTP protocols. Two raw forwards cannot own the same local port. Unknown HTTP hostnames are rejected.
 
-Forwards run in the local daemon after the CLI exits. They stop with `unforward`, `tailmux stop`, or daemon shutdown; they are not automatically restored. SSH failures appear in `forwards` and release the ports; recreate the forward to reconnect. Port ranges are reserved together: a conflict rejects the new group without disturbing existing forwards. Each group uses one SSH connection and private temporary Unix sockets. Forward creation uses your existing SSH configuration and agent in batch mode, so unlock the agent first. Automatic process selection is not yet implemented.
+Forwards run in the local daemon after the CLI exits. `--save NAME` persists a group and restores it when networking next starts. SSH failures retry with capped backoff while keeping the group's local ports reserved. `tailmux forward --resume NAME` retries a saved group; `unforward` stops and forgets it. `tailmux stop` stops networking while preserving saved definitions. Port ranges reserve their ports together, and SSH uses your normal unlocked agent in batch mode.
+
+After upgrading, run `tailmux stop` once so the next command starts a daemon with isolated-loopback support. An existing saved named forward may remain failed until you run `tailmux loopback setup` for its host/name and then `tailmux forward --resume <saved-name>`.
+
+### Saved forwards and public URLs
+
+```bash
+tailmux forward personal/devbox 3000 --name devbox.test --save web
+tailmux forward --resume web
+tailmux ports personal/devbox --forward
+
+# Use a configured provider account/domain; one port per public URL.
+tailmux forward personal/devbox 13000:3000 --cloudflare preview-tunnel \
+  --url https://preview.example.com --save preview
+tailmux forward personal/devbox 13000:3000 --ngrok \
+  --url https://YOUR-ASSIGNED-DOMAIN.ngrok-free.app --save preview
+```
+
+Choose one provider example. Tailmux owns the connector process and rewrites direct localhost redirects to the explicit HTTPS origin. `unforward preview` stops the connector and removes the saved group; external DNS/domain registrations remain with the provider. A stable URL still requires the app and connector to be online. Provider authentication, domain setup and OAuth callback registration are not automatic. See the [forwarding guide](docs/content/docs/forwarding.mdx).
+
+### Host setup
+
+```bash
+tailmux setup check --all
+tailmux setup install personal/devbox --tmux --ports
+tailmux setup orca personal/devbox --local-port 16768
+```
+
+Checks diagnose host tools; installation explicitly adds selected prerequisites. Orca setup defaults to a review-only service plan; `--apply` writes a disabled service after Orca is installed. Firewall persistence and boot startup remain host-specific. See [host setup](docs/content/docs/setup.mdx) and [port discovery](docs/content/docs/ports.mdx).
 
 ## Workflow guides
 
@@ -240,7 +288,7 @@ Forwards run in the local daemon after the CLI exits. They stop with `unforward`
 - [Port forwarding and local URLs](docs/content/docs/forwarding.mdx)
 - [Troubleshooting](docs/content/docs/troubleshooting.mdx)
 
-After upgrading, reopen `tailmux terminal` to regenerate its configuration. A smaller attached client can constrain a Zellij tab; detach unused clients. Preserve full host tab/window names because new split panes use them for routing.
+After upgrading, reopen `tailmux terminal` to regenerate its configuration. Existing windows/tabs whose names still match `profile/host` migrate automatically on first use. Tailmux cannot infer the host of a tab that was already renamed before this upgrade; open that host from the picker once to establish its routed tab. Later renames are safe. A smaller attached client can constrain a Zellij tab; detach unused clients.
 
 Zellij reuses a **running** local session when you detach. Closing a tab with Ctrl+T, then X removes it. After closing the last tab, the next `tailmux terminal` starts a fresh session. Tailmux disables disk-layout resurrection so previously closed tabs cannot return from an old snapshot. Remote tmux shells remain on their hosts; this does not stop remote processes.
 
@@ -264,6 +312,6 @@ tailmux terminal --backend tmux local
 tailmux terminal --backend zellij local
 ```
 
-The box picker lists `local` (this machine) first, followed by remote targets with aligned online/offline and saved labels. Local access works without a Tailscale profile or SSH connection. It opens your `$SHELL` as a login shell (falling back to `/bin/sh`); new panes in the `local` tab/window also run locally. Exiting the shell closes that pane. Keep the tab/window named `local` so new panes retain this routing.
+The box picker lists `local` (this machine) first, followed by remote targets with aligned online/offline and saved labels. Local access works without a Tailscale profile or SSH connection. It opens your `$SHELL` as a login shell (falling back to `/bin/sh`); new panes in that tab/window also run locally after you rename it. Exiting the shell closes that pane.
 
 `local` is reserved by `terminal` for this computer. Use the full `profile/local` target if a remote machine is also named local. Existing shortcuts open the same picker from local and remote tabs.

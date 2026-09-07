@@ -18,6 +18,7 @@ type Host struct {
 	Port    int    `json:"port"`
 }
 type Config struct {
+	HiddenBoxes     map[string]bool `json:"hidden_boxes,omitempty"`
 	TerminalBackend string          `json:"terminal_backend,omitempty"`
 	Profiles        []string        `json:"profiles"`
 	Hosts           map[string]Host `json:"hosts"`

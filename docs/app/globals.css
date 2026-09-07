@@ -114,3 +114,11 @@ code, pre, kbd {font-family:var(--font-mono);letter-spacing:-.03em;}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
 #nd-page .overview-description { margin-bottom: 0; }
+
+/* Keep appearance controls in the header, without a full-width sidebar tray. */
+.site-theme-toggle {flex-shrink:0;border-color:var(--line);background:var(--surface);}
+@media (max-width: 767px) {
+ .header-links {gap:12px;}
+ .site-theme-toggle {padding:2px;}
+ .github-link span,.github-link svg:last-child {display:none;}
+}

@@ -2,6 +2,7 @@ package tailmux
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -109,5 +110,64 @@ func TestPickerDisplayPreservesTarget(t *testing.T) {
 	}
 	if !strings.Contains(rows[1], "online · saved") || !strings.Contains(rows[0], "this machine") {
 		t.Fatal(rows)
+	}
+}
+
+func TestTerminalWindowTargetSurvivesRename(t *testing.T) {
+	if got := terminalWindowTarget("alpha/worker-a", "my renamed tab"); got != "alpha/worker-a" {
+		t.Fatalf("visible rename changed routing: %q", got)
+	}
+	if got := terminalWindowTarget("", "alpha/worker-a"); got != "alpha/worker-a" {
+		t.Fatalf("older window was not migrated by label: %q", got)
+	}
+}
+
+func TestZellijTargetMetadataSurvivesRenameAndCanReset(t *testing.T) {
+	term := terminal{dir: t.TempDir(), backend: "zellij"}
+	if err := os.MkdirAll(filepath.Join(term.dir, "terminal"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := term.saveZellijTarget(7, "alpha/worker-a"); err != nil {
+		t.Fatal(err)
+	}
+	targets, err := term.loadZellijTargets()
+	if err != nil || targets["7"] != "alpha/worker-a" {
+		t.Fatalf("lost stable target: %#v %v", targets, err)
+	}
+	// The display name is deliberately absent from the metadata: changing it
+	// cannot alter the route associated with tab 7.
+	if err := term.clearZellijTargets(); err != nil {
+		t.Fatal(err)
+	}
+	targets, err = term.loadZellijTargets()
+	if err != nil || len(targets) != 0 {
+		t.Fatalf("stale session metadata remains: %#v %v", targets, err)
+	}
+}
+
+func TestTmuxSelectHostReusesRenamedWindow(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux is not installed")
+	}
+	term := terminal{dir: t.TempDir(), backend: "tmux", session: "tmux-route-" + terminalID(t.Name())}
+	t.Cleanup(func() { _ = term.command("kill-server").Run() })
+	if out, err := runOutput(term.command("new-session", "-d", "-s", term.session, "-n", "original", "sleep 30")); err != nil {
+		t.Fatalf("create isolated tmux: %v: %s", err, out)
+	}
+	if _, err := runOutput(term.command("set-window-option", "-t", term.session, "@tailmux_target", "alpha/worker-a")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runOutput(term.command("rename-window", "-t", term.session, "a friendly label")); err != nil {
+		t.Fatal(err)
+	}
+	if err := term.selectHost("alpha/worker-a"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runOutput(term.command("list-windows", "-t", term.session, "-F", "#{window_name}\t#{@tailmux_target}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out) != "a friendly label\talpha/worker-a" {
+		t.Fatalf("picker created a duplicate or lost route after rename: %q", out)
 	}
 }

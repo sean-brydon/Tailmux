@@ -20,16 +20,26 @@ type PortMap struct {
 	Remote int `json:"remote"`
 }
 type ForwardSpec struct {
-	Target  string    `json:"target"`
-	Ports   []PortMap `json:"ports"`
-	Name    string    `json:"name,omitempty"`
-	Rewrite bool      `json:"rewrite_redirects,omitempty"`
+	Target      string         `json:"target"`
+	Ports       []PortMap      `json:"ports"`
+	Name        string         `json:"name,omitempty"`
+	Rewrite     bool           `json:"rewrite_redirects,omitempty"`
+	Save        string         `json:"save,omitempty"`
+	Public      *PublicForward `json:"public,omitempty"`
+	BindAddress string         `json:"bind_address,omitempty"`
+}
+type PublicForward struct {
+	Provider string `json:"provider"`
+	URL      string `json:"url"`
+	Tunnel   string `json:"tunnel,omitempty"`
 }
 type ForwardInfo struct {
-	ID    string      `json:"id"`
-	Spec  ForwardSpec `json:"spec"`
-	State string      `json:"state"`
-	Error string      `json:"error,omitempty"`
+	ID          string      `json:"id"`
+	Spec        ForwardSpec `json:"spec"`
+	State       string      `json:"state"`
+	Error       string      `json:"error,omitempty"`
+	PublicState string      `json:"public_state,omitempty"`
+	PublicError string      `json:"public_error,omitempty"`
 }
 
 func parsePorts(values []string) ([]PortMap, error) {
@@ -110,7 +120,46 @@ func (s ForwardSpec) validate() error {
 			}
 		}
 	}
+	if s.Save != "" && !safeName.MatchString(s.Save) {
+		return fmt.Errorf("invalid saved forward name %q", s.Save)
+	}
+	if address := s.listenerAddress(); net.ParseIP(address) == nil || net.ParseIP(address).To4() == nil || !net.ParseIP(address).IsLoopback() {
+		return fmt.Errorf("forward bind address must be an IPv4 loopback address")
+	}
+	if (s.Name == "" || s.Public != nil) && s.listenerAddress() != "127.0.0.1" {
+		return fmt.Errorf("raw and public forwards must bind to 127.0.0.1")
+	}
+	if s.Public != nil {
+		if len(s.Ports) != 1 {
+			return fmt.Errorf("public URLs require exactly one forwarded port")
+		}
+		if s.Public.Provider != "cloudflare" && s.Public.Provider != "ngrok" {
+			return fmt.Errorf("unsupported public URL provider %q", s.Public.Provider)
+		}
+		if s.Public.Provider == "cloudflare" && !safeName.MatchString(s.Public.Tunnel) {
+			return fmt.Errorf("--cloudflare needs a tunnel name or UUID")
+		}
+		u, err := url.Parse(s.Public.URL)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+			return fmt.Errorf("public URL must be an HTTPS origin without a path, query, or credentials")
+		}
+		if net.ParseIP(u.Hostname()) != nil || strings.Contains(u.Hostname(), "_") {
+			return fmt.Errorf("public URL must use a DNS hostname")
+		}
+		if u.Port() != "" {
+			port, err := strconv.Atoi(u.Port())
+			if err != nil || port < 1 || port > 65535 {
+				return fmt.Errorf("public URL has an invalid port")
+			}
+		}
+	}
 	return nil
+}
+func (s ForwardSpec) listenerAddress() string {
+	if s.BindAddress != "" {
+		return s.BindAddress
+	}
+	return "127.0.0.1"
 }
 func localhostName(name string) bool {
 	return name == "localhost" || name == "127.0.0.1" || name == "::1"
@@ -120,10 +169,13 @@ func localhostName(name string) bool {
 // External OAuth URLs (including embedded redirect_uri parameters) remain untouched.
 func rewriteURL(value string, s ForwardSpec, outward bool) string {
 	u, err := url.Parse(value)
-	if err != nil || u.User != nil || u.Host == "" || (u.Scheme != "" && u.Scheme != "http") {
+	if err != nil || u.User != nil || u.Host == "" || (u.Scheme != "" && u.Scheme != "http" && (s.Public == nil || u.Scheme != "https")) {
 		return value
 	}
 	port := 80
+	if u.Scheme == "https" {
+		port = 443
+	}
 	if u.Port() != "" {
 		port, err = strconv.Atoi(u.Port())
 		if err != nil {
@@ -132,10 +184,25 @@ func rewriteURL(value string, s ForwardSpec, outward bool) string {
 	}
 	for _, p := range s.Ports {
 		if outward && localhostName(strings.ToLower(u.Hostname())) && port == p.Remote {
-			u.Host = net.JoinHostPort(s.Name, strconv.Itoa(p.Local))
+			if s.Public != nil {
+				public, _ := url.Parse(s.Public.URL)
+				u.Scheme, u.Host = public.Scheme, public.Host
+			} else {
+				u.Host = net.JoinHostPort(s.Name, strconv.Itoa(p.Local))
+			}
 			return u.String()
 		}
-		if !outward && strings.EqualFold(u.Hostname(), s.Name) && port == p.Local {
+		inwardName, inwardPort := s.Name, p.Local
+		if s.Public != nil {
+			public, _ := url.Parse(s.Public.URL)
+			inwardName = public.Hostname()
+			inwardPort = 443
+			if public.Port() != "" {
+				inwardPort, _ = strconv.Atoi(public.Port())
+			}
+		}
+		if !outward && strings.EqualFold(u.Hostname(), inwardName) && port == inwardPort {
+			u.Scheme = "http"
 			u.Host = net.JoinHostPort("localhost", strconv.Itoa(p.Remote))
 			return u.String()
 		}
@@ -244,6 +311,11 @@ func httpForward(s ForwardSpec, p PortMap, dial func(context.Context, int) (net.
 		r.SetURL(upstream)
 		r.Out.Host = upstream.Host
 		r.SetXForwarded()
+		if s.Public != nil {
+			public, _ := url.Parse(s.Public.URL)
+			r.Out.Header.Set("X-Forwarded-Proto", public.Scheme)
+			r.Out.Header.Set("X-Forwarded-Host", public.Host)
+		}
 		if s.Rewrite {
 			r.Out.Header.Del("Accept-Encoding")
 			for _, h := range []string{"Origin", "Referer"} {

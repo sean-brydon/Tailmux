@@ -13,6 +13,15 @@ import (
 
 const usage = `Tailmux: remote agent sessions across separate Tailscale accounts.
 
+  tailmux dashboard               Open the interactive control centre (default)
+  tailmux loopback setup <host> [--name NAME]  Configure an isolated box address
+  tailmux loopback list           List isolated box addresses
+  tailmux monitor [--json]        Inspect saved boxes: RAM, sessions and attention
+  tailmux status [--json]         Show boxes, forwards, Orca routes and local tools
+  tailmux ports <host> [--json|--pick|--forward]   Inspect remote listening ports
+  tailmux setup check <host|--all> [--json]   Check host prerequisites
+  tailmux setup install <host> [--tmux] [--ports]   Install host prerequisites
+  tailmux setup orca <host> [--local-port PORT] [--apply]   Plan/configure an Orca service
   tailmux init                    Create an empty config (optional)
   tailmux hosts                   Discover machines across connected profiles
   tailmux hosts add <profile/host> [--user USER] [--address DNS] [--port PORT]
@@ -30,8 +39,9 @@ const usage = `Tailmux: remote agent sessions across separate Tailscale accounts
   tailmux terminal --default tmux|zellij   Save the default without launching
   tailmux herdr sessions <host|--all> [--json]   List remote Herdr sessions
   tailmux forward <host> <ports...> [--name NAME] [--no-rewrite] [--json]
-  tailmux forwards [--json]      List running port forwards
-  tailmux unforward <id>         Stop a port forward
+  tailmux forward --resume NAME   Resume or retry a saved forward
+  tailmux forwards [--json]      List port forwards and connection states
+  tailmux unforward <id|name>     Stop and forget a port forward
   tailmux proxy <host>            Internal SSH stdio transport
   tailmux daemon                  Run the shared tsnet daemon in foreground
   tailmux stop                    Stop local networking; remote agents stay running
@@ -47,6 +57,9 @@ Use hosts add to save SSH overrides and include a host in --all operations.
 var Version = "dev"
 
 func Run(args []string) error {
+	if len(args) == 4 && args[0] == "loopback" && args[1] == "system-setup" {
+		return loopbackSystemSetup(args[2], args[3])
+	}
 	if len(args) >= 2 && args[0] == "herdr" && (args[1] == "attach" || args[1] == "sessions") {
 		return Run(append([]string{args[1]}, args[2:]...))
 	}
@@ -67,13 +80,19 @@ func Run(args []string) error {
 	if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
 		return printCommandHelp(args[0])
 	}
-	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
+	if len(args) == 0 && !interactiveTerminal() || len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Print(usage)
 		return nil
 	}
 	dir, err := configDir()
 	if err != nil {
 		return err
+	}
+	if len(args) == 0 {
+		return dashboardCLI(dir, nil)
+	}
+	if args[0] == "dashboard" {
+		return dashboardCLI(dir, args[1:])
 	}
 	if args[0] == "init" {
 		if len(args) != 1 {
@@ -98,11 +117,29 @@ func Run(args []string) error {
 	if args[0] == "terminal" {
 		return terminalCLI(dir, args[1:])
 	}
+	if len(args) == 2 && args[0] == "monitor" {
+		switch args[1] {
+		case "claude-setup":
+			return setupClaudeMonitor()
+		case "claude-statusline":
+			return captureClaudeStatusline(os.Stdin)
+		}
+	}
 	cfg, err := loadConfig(dir)
 	if err != nil {
 		return err
 	}
 	switch args[0] {
+	case "loopback":
+		return loopbackCLI(dir, cfg, args[1:])
+	case "monitor":
+		return monitorCLI(dir, cfg, args[1:])
+	case "status":
+		return statusCLI(dir, cfg, args[1:])
+	case "ports":
+		return portsCLI(dir, cfg, args[1:])
+	case "setup":
+		return setupCLI(dir, cfg, args[1:])
 	case "forward", "forwards", "unforward":
 		return forwardCLI(dir, args)
 	case "orca":

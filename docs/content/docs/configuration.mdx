@@ -44,7 +44,9 @@ The default configuration is empty. `login` adds profiles; `hosts add` saves mac
 
 Generated multiplexer settings belong to Tailmux's dedicated session. Zellij's generated file is rewritten on launch; editing it is not a persistent customization interface. Existing remote shells retain their running wrapper until restarted.
 
-Forward groups are runtime state, not config entries. They are not automatically restored after daemon shutdown. Custom forwarding names do not change system DNS.
+Ordinary forward groups are runtime state. `forward --save NAME` stores a definition in private `forwards.json` and restores it when the daemon starts. `unforward` removes the saved definition; `stop` preserves it. Provider credentials remain managed by the provider CLI; connector logs and generated configuration are private files under `public-tunnels/`. Custom forwarding names do not change system DNS.
+
+The interactive `tailmux` dashboard configures profiles, saved SSH hosts and the terminal backend without editing JSON manually. Terminal target metadata is separate from visible tab names. See [dashboard](/docs/dashboard) and [terminal routing](/docs/terminal).
 
 ## Directory contents
 
@@ -80,3 +82,5 @@ tailmux doctor personal/devbox
 The second command starts a new daemon automatically. A stop closes active local transports but preserves the identity files. Herdr and dedicated tmux shells continue on remote hosts. Active forwards stop and must be recreated.
 
 Zellij reuses a **running** local session when you detach. Closing a tab with Ctrl+T, then X removes it. After closing the last tab, the next `tailmux terminal` starts a fresh session. Tailmux disables disk-layout resurrection so previously closed tabs cannot return from an old snapshot. Remote tmux shells remain on their hosts; this does not stop remote processes.
+
+Dashboard hidden-box preferences are stored in `hidden_boxes`, keyed by the full target (or `local`). Use `h` to hide a selected box and `H` to reveal hidden entries for restoration. These preferences do not remove hosts or stop connections.

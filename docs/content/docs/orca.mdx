@@ -29,6 +29,16 @@ Orca's Remote Orca Servers settings can use the saved environment. Desktop UI in
 
 Follow Orca's [headless Linux setup guide](https://github.com/stablyai/orca/blob/main/docs/reference/headless-linux-server.md). Install its Linux launcher, Xvfb and Electron libraries, and verify the runtime under your remote SSH user. The Linux CLI is named `orca-ide`; outside managed terminals, bare `orca` may be the GNOME screen reader.
 
+Once `orca-ide` is available, use Tailmux's [host setup workflow](/docs/setup) to review and create the systemd user service:
+
+```bash
+tailmux setup check lab/worker
+tailmux setup orca lab/worker --remote-port 6768 --local-port 16768
+tailmux setup orca lab/worker --remote-port 6768 --local-port 16768 --apply
+```
+
+Review mode changes nothing. `--apply` writes the unit but leaves it stopped and disabled so you can install and persist the firewall rule first. Existing units require the explicit `--replace` option and receive a timestamped backup.
+
 Install the Orca CLI locally too. Tailmux follows `ORCA_CLI_COMMAND`, then `ORCA_DEV_REPO_ROOT` for `orca-dev`; otherwise it uses `orca-ide` on Linux and `orca` on macOS. It strips inherited `ORCA_ENVIRONMENT` and `ORCA_PAIRING_CODE` routing so commands do not accidentally reach another server.
 
 ## Choose ports and restrict access
@@ -51,6 +61,8 @@ sudo iptables -I INPUT ! -i lo -p tcp --dport 6768 -j REJECT
 An interactive iptables rule is not necessarily persistent after reboot. Use the host's firewall management to preserve the rule before enabling a runtime at boot. The setup below is intentionally started on demand rather than enabled at boot. Do not expose the runtime port directly to the public internet.
 
 ## Configure the service
+
+The recommended path is `tailmux setup orca`, described above. It discovers the absolute `orca-ide` path, creates the private runtime directory and writes this unit safely. The manual equivalent is included for hosts where the setup command cannot manage systemd.
 
 Create private log and service directories on the remote host:
 

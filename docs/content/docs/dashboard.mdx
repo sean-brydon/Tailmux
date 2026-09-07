@@ -1,0 +1,119 @@
+---
+title: Dashboard
+description: A terminal control centre for boxes, networking and runtime setup.
+icon: PanelsTopLeft
+---
+
+Run `tailmux` in an interactive terminal to open the dashboard. `tailmux dashboard` opens it explicitly. When standard input or output is redirected, bare `tailmux` prints help instead; scripts can use `tailmux status --json`.
+
+The dashboard uses Charm's Bubble Tea and Lip Gloss, with full-row selection, compact machine lists, status colors and usage meters. Wide terminals show navigation beside details; narrow terminals show the selected machine above its details. It manages your workspace and opens the existing tmux or Zellij terminal when you select a box. Detaching from that terminal returns to the dashboard. Quitting the dashboard leaves networking and remote sessions running.
+
+## Panels
+
+| Panel | Contents |
+| --- | --- |
+| **0 Monitor** | Default home: RAM meters, Orca/Herdr sessions, reported alerts and Codex account quotas |
+| **1 Boxes** | Your local computer, saved remote hosts and discovered peers |
+| **2 Forwards** | Forward routes, saved names (including stopped ones), connection state and public URLs |
+| **3 Orca** | Paired runtimes and their local tunnel state |
+| **4 Setup** | Add an account, save SSH settings and choose tmux or Zellij |
+
+Status refreshes every 15 seconds; `r` refreshes immediately. Opening the dashboard does not start the networking daemon. Press `n` to start networking and restore saved forwards. Peer online status comes from Tailscale and is not an SSH authentication test. Orca entries distinguish a paired route from a verified runtime; press `s` to check the runtime explicitly.
+
+## Keyboard controls
+
+| Key | Action |
+| --- | --- |
+| `0`–`4`, Tab / Shift+Tab | Change panel |
+| Up/Down or `j`/`k` | Select an item |
+| `h` | Hide the selected box, or restore it while showing hidden boxes |
+| `H` (Shift+H) | Show/hide hidden boxes |
+| `/` | Filter items by name; Enter keeps the filter and Esc clears it |
+| Enter or `t` | Open the selected box, or apply the selected setup option |
+| `a` | Add a Tailscale account with a profile name you choose |
+| `e` | Save or edit a host's SSH target, user, address and port |
+| `f` | Configure a forward, optional saved name and public URL |
+| `p` | Inspect a remote box's ports and forward a selected port |
+| `c` | Check the selected remote host's prerequisites |
+| `i` | Install tmux and port-inspection packages on the selected remote host |
+| `u` | Review or apply an Orca user-service configuration |
+| `o` | Pair or reconnect a running Orca runtime |
+| `s` | Verify an Orca runtime and restore its tunnel |
+| `v` | Resume/retry the selected saved forward |
+| `x` | Stop and remove the selected forward |
+| `n` | Start networking and restore saved forwards |
+| `r` | Refresh status |
+| Page Up / Page Down | Scroll command output |
+| Esc | Dismiss output or cancel a form |
+| `q` or Ctrl+C | Quit the dashboard |
+
+Forms use Tab to move between fields, Ctrl+U to clear a field, and Enter to submit. No shell command parsing is involved: values are passed as separate CLI arguments. On short screens, the form scrolls to keep the focused field visible.
+
+Hidden-box choices persist in your configuration. Hiding only changes the dashboard list; it does not disconnect the box, remove its SSH settings, or stop terminals and forwards. Press `H`, select a hidden box and press `h` to restore it. Left arrow or Shift+Tab moves to the previous panel.
+
+## Forward setup
+
+The forward form accepts a remote target, ports such as `13000:3000`, an optional local HTTP hostname, and an optional saved name. Leaving the provider blank creates a private loopback forward. Empty fields show dimmed examples, including a hostname based on the selected box such as `devbox.localhost`; examples are not submitted as values. The focused field explains what to enter, and the Cloudflare tunnel field shows the login, tunnel creation and DNS routing commands.
+
+For a public URL, choose `cloudflare` or `ngrok`, enter the HTTPS origin already configured in that provider account, and supply the named tunnel for Cloudflare. Submitting publishes the selected port through the provider. See [forwarding](/docs/forwarding) for provider setup, rewrite boundaries and lifecycle details.
+
+## Host setup
+
+Checks show remote prerequisites and SSH errors. Package installation runs interactively so sudo authentication remains in your terminal. Herdr and Orca application installation remains a separate step; the dashboard checks their availability.
+
+The Orca form defaults to **plan**. **Apply** writes a stopped, disabled user service; firewall configuration and persistence must be completed before starting or enabling it. Choose a distinct local port for every runtime. See [host setup](/docs/setup).
+
+## Status for scripts
+
+```bash
+tailmux status
+tailmux status --json
+```
+
+These commands inspect the local daemon without starting it. JSON includes boxes, forwards, paired Orca routes, local tool availability and inspection errors. It does not include runtime pairing credentials.
+
+## Box monitor
+
+The dashboard opens on **0 Monitor**. It polls this computer and saved SSH hosts; discovered tailnet peers are not probed automatically. RAM and sessions refresh every 15 seconds, and Codex quotas are cached for one minute. Remote inspection requires networking already running. Hiding a box changes its visibility, not polling or its running sessions.
+
+RAM appears as an ASCII meter, for example `[#####-----] 50% · 32.0 / 64.0 GiB`. Linux usage is total minus available memory; macOS uses free, inactive and speculative pages as an estimate of available memory. Unreachable or unsupported systems show an error rather than zero.
+
+Orca displays worktrees and agent states from paired environments. An unread update is marked explicitly; it does not necessarily mean an agent is blocked. Herdr displays sessions and, where its CLI supports it, agent inventory with reported status. When a runtime does not expose an authoritative attention flag, the monitor labels that state unknown rather than treating idle as waiting for input. Missing runtimes do not prevent other sources from loading.
+
+Account usage comes from the default Codex CLI login on each box. It includes available quota windows, used/remaining percentages and reset times. The same account can appear on several boxes; these are shared account limits, not independent box allowances. This does not inspect every account configured inside Orca. The Codex app-server API is experimental and version-sensitive. Claude telemetry is available through the opt-in status-line integration below; other provider quotas remain unavailable.
+
+Account limits appear before the session table, so busy runtimes do not push them below all session rows. Reset times use your local time zone. Use Page Up / Page Down to scroll details; the panel heading shows the visible line range. Enter opens the selected box's terminal.
+
+For a one-shot report:
+
+```bash
+tailmux monitor
+tailmux monitor --json
+```
+
+These commands perform bounded read-only runtime and SSH queries without starting networking, pairing runtimes or logging into providers. JSON may include session titles and account email labels; it does not include pairing tokens or credentials.
+
+
+## Claude usage and richer agent details
+
+On each computer running Claude Code, install the current Tailmux binary and run:
+
+```bash
+tailmux monitor claude-setup
+```
+
+This adds a Claude status line only when none is configured, preserving other settings and backing up an existing settings file. It respects `CLAUDE_CONFIG_DIR`. If you already have a custom status line, keep it and pipe a copy of the same JSON input into `tailmux monitor claude-statusline`; do not pipe its rendered output. The setup command will refuse to overwrite it.
+
+Start a new interactive Claude Code session and make a normal request. Supported Claude versions send subscription limits after the first response. Tailmux captures a small allowlist of telemetry fields, not conversation transcripts or credentials. It does not send extra model requests to refresh usage. See [Claude's status-line reference](https://code.claude.com/docs/en/statusline) for supported versions and plan availability.
+
+Claude usage is an observation from a session, not a live account query. A quiet or closed session stops updating; timestamps and stale indicators distinguish old observations from current quota data. The payload does not identify the account email, so Tailmux cannot reliably merge multiple Claude logins into account totals. Session cost is reported cost, not your subscription invoice.
+
+Session details include project, branch, agent type and task title where the runtime provides them. Herdr blocked work and unseen completion are distinguished from idle activity; Orca unread updates remain notifications rather than proof an agent needs input. Missing metadata stays absent.
+
+To remove the Claude integration, remove the `statusLine` entry containing `tailmux monitor claude-statusline` from your Claude settings. Existing backup files are named `settings.tailmux-backup-*.json`.
+
+## Per-box ports and URLs
+
+Monitor and Boxes details show Tailmux port mappings for the selected remote box: local bind address, remote loopback port, named HTTP URL, public URL and connector state. The local computer shows all Tailmux listeners because it owns those bindings. Stopped or failed routes are labelled as configured endpoints rather than confirmed active listeners. Raw TCP forwards show their address without assuming HTTP.
+
+Press `2` to manage forwards or `p` to inspect listening ports on the remote machine. This section lists Tailmux-managed routes; it does not claim to inventory ports opened by every local application.

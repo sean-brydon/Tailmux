@@ -1,0 +1,51 @@
+---
+title: Set up and check hosts
+description: Diagnose remote dependencies and prepare tmux, port discovery, and Orca.
+icon: Wrench
+---
+
+Run a readiness check after saving a host:
+
+```bash
+tailmux setup check lab/worker
+tailmux setup check --all
+tailmux setup check --all --json
+```
+
+The check connects through the selected Tailmux profile and reports SSH reachability, the remote operating system, tmux, Zellij, Herdr, Orca, systemd, and the tools used for port discovery. If SSH fails, verify the host is online and unlock your SSH agent before retrying.
+
+Missing Herdr and Orca installations are reported as actionable notes. Their release, runtime and authentication setup is product-specific, so Tailmux does not guess an installer for them.
+
+## Install basic packages
+
+Package installation is always explicit:
+
+```bash
+tailmux setup install lab/worker --tmux
+tailmux setup install lab/worker --ports
+tailmux setup install lab/worker --tmux --ports
+```
+
+`--tmux` installs the tmux package. `--ports` installs `iproute2` so Tailmux can use `ss`. Tailmux detects apt, dnf, or yum and opens an interactive SSH session for `sudo`; it does not install either package during `setup check`. Other operating systems and package managers require manual installation.
+
+Zellij remains optional. The multiplexer selected on your local machine does not require the same multiplexer on every remote box. Herdr and Orca still need their own supported installation and authentication steps.
+
+## Prepare an Orca user service
+
+After installing `orca-ide` on the remote host, generate a review without changing it:
+
+```bash
+tailmux setup orca lab/worker --remote-port 6768 --local-port 16768
+```
+
+The output explains the service path, selected ports, firewall restriction, and final start command. Apply the reviewed service configuration with:
+
+```bash
+tailmux setup orca lab/worker --remote-port 6768 --local-port 16768 --apply
+```
+
+Tailmux discovers the remote `orca-ide` executable and writes `~/.config/systemd/user/tailmux-orca.service` with private runtime logs. It reloads the user service manager but leaves the service stopped and disabled. If a service file already exists, Tailmux refuses to replace it; inspect it first, then use `--apply --replace`. Replacements receive a timestamped backup, and an active service is never overwritten.
+
+Orca currently needs a host firewall rule because its serving port may listen beyond loopback. The setup output gives an iptables rule for the selected remote port. Tailmux does not apply or persist that firewall rule automatically: use the host's firewall manager to make the restriction survive reboot, verify it, and only then start or enable the service. Never expose an Orca runtime port directly to the internet.
+
+Continue with [Orca remote runtimes](/docs/orca) to install its Linux dependencies, connect the runtime, and understand its private readiness log.

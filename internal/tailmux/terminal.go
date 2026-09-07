@@ -64,10 +64,14 @@ func terminalCLI(dir string, args []string) error {
 			}
 			return t.pick(cfg)
 		case "_shell":
-			if len(rest) != 1 {
+			if len(rest) > 2 {
 				return fmt.Errorf("invalid shell arguments")
 			}
-			return t.shell(cfg)
+			target := ""
+			if len(rest) == 2 {
+				target = rest[1]
+			}
+			return t.shell(cfg, target)
 		}
 		return fmt.Errorf("unknown internal terminal action")
 	}
@@ -124,14 +128,8 @@ func (t terminal) attachZellij(cmd *exec.Cmd, target string) error {
 		if err := t.selectHost(target); err != nil {
 			continue
 		}
-		out, err := runOutput(t.action("query-tab-names"))
-		if err != nil {
-			continue
-		}
-		for _, name := range strings.Split(strings.TrimSpace(out), "\n") {
-			if name == target {
-				return <-done
-			}
+		if ok, _ := t.zellijHasTarget(target); ok {
+			return <-done
 		}
 	}
 	cmd.Process.Signal(os.Interrupt)
@@ -220,7 +218,9 @@ func (t terminal) prepare() error {
 				return err
 			}
 		}
-		_, err := runOutput(t.command("bind-key", "c", "new-window", "-n", "#{window_name}"))
+		// Pass the stable target to a new window. Its visible name is only a label
+		// and may have been changed by the user.
+		_, err := runOutput(t.command("bind-key", "c", "new-window", "-n", "#{window_name}", t.invoke("_shell")+" "+"#{@tailmux_target}"))
 		return err
 	}
 	// An isolated configuration leaves the user's normal Zellij config untouched.
@@ -253,6 +253,11 @@ func (t terminal) prepare() error {
 			}
 		}
 	}
+	// Zellij can reuse tab IDs after a session is recreated. Never carry
+	// routing metadata from a session the user already closed.
+	if err := t.clearZellijTargets(); err != nil {
+		return err
+	}
 	_, err := runOutput(t.zellij("--config", path, "attach", "--create-background", t.session))
 	return err
 }
@@ -269,22 +274,57 @@ func (t terminal) namePane(pane, name string) {
 }
 func (t terminal) selectHost(target string) error {
 	if t.backend == "tmux" {
-		out, err := runOutput(t.command("list-windows", "-t", t.session, "-F", "#{window_id}\t#{window_name}"))
+		out, err := runOutput(t.command("list-windows", "-t", t.session, "-F", "#{window_id}\t#{@tailmux_target}\t#{window_name}"))
 		if err != nil {
 			return err
 		}
 		for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-			id, name, ok := strings.Cut(line, "\t")
-			if ok && name == target {
-				_, err = runOutput(t.command("select-window", "-t", id))
+			parts := strings.SplitN(line, "\t", 3)
+			if len(parts) == 3 && (parts[1] == target || (parts[1] == "" && parts[2] == target)) {
+				if parts[1] == "" {
+					_, _ = runOutput(t.command("set-window-option", "-t", parts[0], "@tailmux_target", target))
+				}
+				_, err = runOutput(t.command("select-window", "-t", parts[0]))
 				return err
 			}
 		}
-		_, err = runOutput(t.command("new-window", "-t", t.session, "-n", target, t.invoke("_shell")))
+		out, err = runOutput(t.command("new-window", "-P", "-F", "#{window_id}", "-t", t.session, "-n", target, t.invoke("_shell")+" "+shellQuote(target)))
+		if err != nil {
+			return err
+		}
+		_, err = runOutput(t.command("set-window-option", "-t", strings.TrimSpace(out), "@tailmux_target", target))
 		return err
 	}
-	_, err := runOutput(t.action("go-to-tab-name", "--create", target))
-	return err
+	panes, err := t.zellijPanes(false)
+	if err == nil {
+		targets, _ := t.loadZellijTargets()
+		for _, p := range panes {
+			known := targets[strconv.Itoa(p.TabID)]
+			if known == target || (known == "" && p.TabName == target) {
+				if known == "" {
+					_ = t.saveZellijTarget(p.TabID, target)
+				}
+				_, err = runOutput(t.action("go-to-tab", strconv.Itoa(p.TabPosition+1)))
+				return err
+			}
+		}
+	}
+	if _, err = runOutput(t.action("go-to-tab-name", "--create", target)); err != nil {
+		return err
+	}
+	// Record the new tab promptly, before its display name can be changed.
+	for i := 0; i < 20; i++ {
+		panes, err = t.zellijPanes(false)
+		if err == nil {
+			for _, p := range panes {
+				if p.TabName == target {
+					return t.saveZellijTarget(p.TabID, target)
+				}
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return fmt.Errorf("Zellij opened %s but its tab metadata was unavailable", target)
 }
 func (t terminal) pick(cfg Config) error {
 	fmt.Fprintln(os.Stderr, "Loading boxes…")
@@ -403,44 +443,76 @@ func localTerminalShell() *exec.Cmd {
 	return cmd
 }
 
-func (t terminal) currentTarget() (string, string, error) {
+type zellijPane struct {
+	ID          int    `json:"id"`
+	TabID       int    `json:"tab_id"`
+	TabPosition int    `json:"tab_position"`
+	TabName     string `json:"tab_name"`
+	IsPlugin    bool   `json:"is_plugin"`
+}
+
+func terminalWindowTarget(stable, label string) string {
+	if stable != "" {
+		return stable
+	}
+	return label
+}
+
+func (t terminal) zellijPanes(currentTab bool) ([]zellijPane, error) {
+	args := []string{"list-panes", "--json", "--tab"}
+	if currentTab {
+		args = append(args, "--current-tab")
+	}
+	out, err := runOutput(t.action(args...))
+	if err != nil {
+		return nil, err
+	}
+	var panes []zellijPane
+	if err := json.Unmarshal([]byte(out), &panes); err != nil {
+		return nil, err
+	}
+	return panes, nil
+}
+
+func (t terminal) currentTarget() (string, string, int, error) {
 	if t.backend == "tmux" {
 		pane := os.Getenv("TMUX_PANE")
 		if pane == "" {
-			return "", "", fmt.Errorf("missing tmux pane context")
+			return "", "", 0, fmt.Errorf("missing tmux pane context")
 		}
-		out, err := runOutput(t.command("display-message", "-p", "-t", pane, "#{window_name}"))
-		return strings.TrimSpace(out), pane, err
+		out, err := runOutput(t.command("display-message", "-p", "-t", pane, "#{@tailmux_target}\t#{window_name}"))
+		stable, label, _ := strings.Cut(strings.TrimSpace(out), "\t")
+		return terminalWindowTarget(stable, label), pane, 0, err
 	}
 	pane := os.Getenv("ZELLIJ_PANE_ID")
 	if pane == "" {
-		return "", "", fmt.Errorf("missing Zellij pane context")
+		return "", "", 0, fmt.Errorf("missing Zellij pane context")
 	}
-	out, err := runOutput(t.action("list-panes", "--json", "--tab"))
+	panes, err := t.zellijPanes(false)
 	if err != nil {
-		return "", "", err
+		return "", "", 0, err
 	}
-	var panes []struct {
-		ID       int    `json:"id"`
-		PaneID   int    `json:"pane_id"`
-		TabName  string `json:"tab_name"`
-		IsPlugin bool   `json:"is_plugin"`
-	}
-	if err = json.Unmarshal([]byte(out), &panes); err != nil {
-		return "", "", err
+	targets, err := t.loadZellijTargets()
+	if err != nil {
+		return "", "", 0, err
 	}
 	for _, p := range panes {
 		if !p.IsPlugin && (strconv.Itoa(p.ID) == pane) {
-			return p.TabName, pane, nil
+			target := targets[strconv.Itoa(p.TabID)]
+			if target == "" {
+				target = p.TabName // migrate a tab created by an older Tailmux.
+			}
+			return target, pane, p.TabID, nil
 		}
 	}
-	return "", "", fmt.Errorf("Zellij pane %s not found", pane)
+	return "", "", 0, fmt.Errorf("Zellij pane %s not found", pane)
 }
-func (t terminal) shell(cfg Config) error {
+func (t terminal) shell(cfg Config, requestedTarget string) error {
 	var target, pane string
+	var tabID int
 	var err error
 	for i := 0; i < 20; i++ {
-		target, pane, err = t.currentTarget()
+		target, pane, tabID, err = t.currentTarget()
 		if err == nil {
 			break
 		}
@@ -449,7 +521,11 @@ func (t terminal) shell(cfg Config) error {
 	if err != nil {
 		return err
 	}
+	if requestedTarget != "" {
+		target = requestedTarget
+	}
 	if target == "local" {
+		t.rememberTarget(pane, tabID, target)
 		t.namePane(pane, "Local")
 		return localTerminalShell().Run()
 	}
@@ -467,6 +543,7 @@ func (t terminal) shell(cfg Config) error {
 			}
 		}
 	}
+	t.rememberTarget(pane, tabID, target)
 	t.namePane(pane, target)
 	return t.remote(cfg, target, "pane-"+terminalID(t.dir+t.backend+target+pane))
 }

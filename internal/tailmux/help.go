@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-const forwardUsage = `Usage: tailmux forward <host> <ports...> [--name NAME] [--no-rewrite] [--json]
+const forwardUsage = `Usage: tailmux forward <host> <ports...> [--name NAME] [--save NAME] [--no-rewrite] [--json]
+       tailmux forward --resume NAME
 
 Ports: a single port, inclusive range, comma-separated list, or local:remote.
 At most 100 ports per group. Options follow the host; ports may surround options.
@@ -13,23 +14,33 @@ At most 100 ports per group. Options follow the host; ports may surround options
   --name NAME     Serve HTTP by hostname; multiple names can share a local port
   --no-rewrite    Disable redirect, JSON URL, cookie, Origin and Referer rewriting
   --json          Print the created forward as JSON, including its ID
+  --save NAME     Restore this group when the daemon next starts
+  --cloudflare TUNNEL  Manage a locally configured named tunnel; requires --url
+  --ngrok         Manage an ngrok endpoint; requires --url
+  --url HTTPS_URL Explicit public origin (one port only; provider setup required)
 
 Examples:
   tailmux forward lab/worker 3000
-  tailmux forward lab/worker 3000-3005 --name worker.localhost
+  tailmux loopback setup lab/worker --name worker.test
+  tailmux forward lab/worker 3000-3005 --name worker.test
   tailmux forward lab/worker 8080:3000,9090:9000
-  tailmux forward lab/worker 3000 --name worker.local
 
 Without --name: raw TCP to remote loopback, preserving response bytes.
 With --name: HTTP proxy with localhost redirect rewriting enabled by default.
-.localhost works in modern browsers; custom names (including .local) need DNS
-or a hosts-file entry pointing to 127.0.0.1. All listeners bind to 127.0.0.1.
+Private named routes require tailmux loopback setup first. Each box gets a
+dedicated 127.77.x.y address, allowing boxes to use the same port. Browsers
+force .localhost to 127.0.0.1, so use .test or another custom name instead.
+Raw TCP and public forwards continue to bind to 127.0.0.1.
 OAuth callback allowlists and HTTPS requirements may still need app configuration.
 
-Forwards persist after this command exits, until stopped or the daemon exits.
-Use tailmux forwards [--json] to list IDs; tailmux unforward <id> to stop one.
+Forwards run after this command exits. Saved groups restore on daemon startup;
+SSH disconnections retry with capped backoff. --resume retries a saved group.
+Use tailmux forwards [--json] to list IDs; tailmux unforward <id|name> stops and
+forgets a group, including its managed public connector. stop preserves saved
+specs. Provider credentials/DNS setup and OAuth registrations remain separate.
+Public mode rewrites direct loopback URLs to --url; it does not rewrite JS/HTML.
 `
-const terminalUsage = `Usage: tailmux terminal [--backend tmux|zellij] [host]
+const terminalUsage = `Usage: tailmux terminal [--backend tmux|zellij] [local|host]
        tailmux terminal --default tmux|zellij
 
   --backend NAME  Override the backend for this launch; put flags before the host
@@ -39,18 +50,37 @@ Uses the saved default, otherwise tmux. Requires fzf and the selected backend
 locally, plus tmux on each remote host for persistent shells.
 
 Examples:
-  tailmux terminal
+  tailmux terminal local
   tailmux terminal --backend zellij lab/worker
   tailmux terminal --default tmux
 
 Alt+B opens the box picker in either backend; tmux also supports Ctrl+B, B.
 Zellij also supports Ctrl+B in normal mode, or F2 when unlocked.
 Splits in a host tab/window open independent persistent shells on that host.
+The local target opens your login shell. Routing survives tab/window renames.
 Detach: Ctrl+B, D (tmux), or Ctrl+O, D (Zellij).
 `
 
 func printCommandHelp(command string) error {
 	switch command {
+	case "dashboard":
+		fmt.Println("Usage: tailmux dashboard\n\nBare tailmux also opens the dashboard in an interactive terminal.\n0 Monitor, 1–4 panels, Enter terminal, h hide box, H show hidden, a account, e host settings,\nf forward, p ports,\nc host check, i install prerequisites, u Orca setup, n start networking, q quit.")
+		return nil
+	case "monitor":
+		fmt.Println("Usage: tailmux monitor [--json]\n       tailmux monitor claude-setup\n       tailmux monitor claude-statusline\n\nInspect RAM, Orca/Herdr sessions and available Codex/Claude usage on local and saved boxes.\nRead-only; does not start networking. The dashboard opens on 0 Monitor.")
+		return nil
+	case "status":
+		fmt.Println("Usage: tailmux status [--json]\n\nInspect boxes, forwards, saved Orca routes and local tools without starting networking.")
+		return nil
+	case "loopback":
+		fmt.Println("Usage: tailmux loopback setup <host> [--name NAME]\n       tailmux loopback list\n\nAssign a stable dedicated 127.77.x.y loopback address to a canonical box and map\nits private HTTP hostname in /etc/hosts. The default name is <host>.test. macOS\nadds a loopback alias through sudo; rerun setup after reboot before resuming named\nforwards. .localhost is rejected because browsers force it to 127.0.0.1.")
+		return nil
+	case "setup":
+		fmt.Println("Usage: tailmux setup check <host|--all> [--json]\n       tailmux setup install <host> [--tmux] [--ports]\n       tailmux setup orca <host> [--local-port PORT] [--remote-port PORT] [--apply] [--replace]\n\nInstall requires explicit package flags. Orca setup defaults to a review-only plan;\napply writes a stopped, disabled user service. Orca installation and persistent\nfirewall configuration are separate. Replace backs up an existing stopped unit.")
+		return nil
+	case "ports":
+		fmt.Println("Usage: tailmux ports <host> [--json|--pick|--forward]\n\nList remote TCP ports/processes using ss or lsof. Pick prints the selected port;\nforward selects and forwards it to the same local port. Process visibility depends\non the SSH user's permissions. The remote service must accept loopback traffic.")
+		return nil
 	case "orca":
 		fmt.Print(orcaUsage)
 		return nil

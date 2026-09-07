@@ -83,7 +83,7 @@ HTTP 421 means the request's Host header does not match a named forward on that 
 
 ## Forward creation or reconnection fails
 
-Forward creation uses batch SSH authentication. Unlock your agent and verify `tailmux ssh <host> hostname`. Check host SSH forwarding policy. Failed tunnels appear in `tailmux forwards` and release their ports; remove the failed entry and create a new forward. `tailmux stop` removes all forwarding runtime state.
+Forward creation uses batch SSH authentication. Unlock your agent and verify `tailmux ssh <host> hostname`. Check host SSH forwarding policy. Failed tunnels retry with capped backoff while retaining their ports. Exhausted retries remain visible in `tailmux forwards`; repair SSH access, then retry the saved forward or remove/recreate the group. `tailmux stop` stops runtime connections but retains saved definitions for the next daemon start.
 
 ## Box picker shortcut does nothing
 
@@ -97,12 +97,24 @@ Another attached Zellij client may have a smaller terminal. Use `zellij list-ses
 
 ## Blue command path or square symbols
 
-The blue path is a Zellij pane title, not an error or remote output. Current Tailmux names new panes after their target and enables simplified UI to avoid missing arrow-font symbols. Reopen Tailmux after upgrading. Existing pane titles can be changed with Zellij's pane rename action; preserve **tab/window** names because they route new shells.
+The blue path is a Zellij pane title, not an error or remote output. Current Tailmux names new panes after their target and enables simplified UI to avoid missing arrow-font symbols. Reopen Tailmux after upgrading. Existing pane titles can be changed with Zellij's pane rename action. Current versions store routing separately, so tab/window names may also be changed.
 
 ## New splits connect to the wrong box or show the chooser
 
-Keep tab/window names equal to the full target, such as `personal/devbox`. The default-shell wrapper uses that name to choose the host. Changing it does not move an existing shell. Use the picker to create or select a correctly named host tab. Each pane has a separate persistent remote tmux shell; `tailmux herdr sessions` lists Herdr sessions only.
+Routing is stored independently of tab/window names, so renaming a tab retains its host. Older tabs that were renamed before upgrading have no recoverable routing metadata; open the intended host once from the picker to establish a routed tab. Each pane has a separate persistent remote tmux shell; `tailmux herdr sessions` lists Herdr sessions only.
 
 ## Closed tabs come back
 
 Earlier Tailmux versions automatically resurrected Zellij's last saved layout after its final tab closed. Update the binary and reopen with `tailmux terminal`. Current versions reattach to live sessions but discard exited snapshots before creating a fresh session. Detaching still preserves live tabs. This behavior is separate from `tailmux herdr sessions`, which lists remote Herdr processes.
+
+## New forwarding flags rejected after upgrading
+
+An already running daemon keeps executing its previous binary. New persistent/public forwarding features require the updated daemon. Detach from sessions as needed, run `tailmux stop`, and start networking again. This interrupts local SSH tunnels and forwards; remote persistent sessions remain running. Reconnect Orca with `tailmux orca status <host>`.
+
+## Public URL is unavailable
+
+Check `tailmux forwards` for SSH and provider states. Install/authenticate the provider CLI, verify the configured domain and Cloudflare DNS route, and inspect the private provider log indicated by the error. A running connector process does not guarantee a working DNS route or application. For login loops, check the app's public origin and OAuth callback registration; rewriting cannot change provider allowlists.
+
+## Dashboard is missing or too small
+
+Bare `tailmux` opens the dashboard only when input and output are terminals. Use `tailmux dashboard` explicitly, or `tailmux status --json` in scripts. Resize to at least 40 columns by 12 rows. Tab moves through form fields, including fields below the visible area.

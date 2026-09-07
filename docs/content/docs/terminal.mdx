@@ -17,9 +17,11 @@ Install `fzf` and your chosen multiplexer locally. This integration is tested wi
 
 **Alt+B** opens a fuzzy box picker in either backend. Zellij also supports **Ctrl+B** in normal mode or **F2** when unlocked; these avoid terminals that do not send Option/Alt as Meta. With tmux, **Ctrl+B, B** also opens it. Search visible machines across your profiles and press Enter to connect or switch to an existing host window/tab. Offline machines are labeled; reachability and SSH permissions still determine whether a connection can succeed. The initial home pane also offers Enter to open the picker.
 
-New split panes inside a host window/tab connect to that same host, each with its own persistent remote shell. A new unnamed Zellij tab shows the box chooser rather than a local shell. Keep host window/tab names unchanged: those names determine which host new panes connect to. Invalid or unrecognized names return to the chooser.
+New split panes inside a host window/tab connect to that same host, each with its own persistent remote shell. A new unnamed Zellij tab shows the box chooser rather than a local shell. You can rename host and local windows/tabs freely: Tailmux stores the canonical route separately and the picker still switches to the existing renamed window/tab. Invalid or unrecognized tabs return to the chooser.
 
-Each configuration directory gets its own local tmux socket/Zellij session. Tailmux writes its generated Zellij configuration under `TAILMUX_HOME/terminal/` and does not modify your normal multiplexer config. Reopening reuses the same local session. The picker does not stop or migrate processes when you switch boxes.
+Each configuration directory gets its own local tmux socket/Zellij session. Tailmux writes its generated Zellij configuration and private tab-routing metadata under `TAILMUX_HOME/terminal/`; it does not modify your normal multiplexer config. tmux keeps the same metadata directly on each window. Reopening reuses the same local session. The picker does not stop or migrate processes when you switch boxes.
+
+After upgrading, an older window/tab whose name is still its canonical `profile/host` value is migrated automatically when Tailmux next uses it. If it was already renamed before this version, Tailmux cannot infer the original host from that label. Open the host from the picker once to establish a routed tab; renames after that are preserved safely.
 
 Remote shells run on a dedicated tmux server named `tailmux`, with its status bar hidden and **Ctrl+A** as its prefix. Your existing remote tmux sessions/configuration and Herdr sessions remain independent. Disconnecting shows a prompt: Enter reconnects to the same remote shell, while `q` closes the local pane. Closing local panes leaves their remote sessions available; they are not automatically deleted. This first version does not provide a remote-session cleanup browser.
 
@@ -48,6 +50,6 @@ tailmux terminal --backend tmux local
 tailmux terminal --backend zellij local
 ```
 
-The box picker lists `local` (this machine) first, followed by remote targets with aligned online/offline and saved labels. Local access works without a Tailscale profile or SSH connection. It opens your `$SHELL` as a login shell (falling back to `/bin/sh`); new panes in the `local` tab/window also run locally. Exiting the shell closes that pane. Keep the tab/window named `local` so new panes retain this routing.
+The box picker lists `local` (this machine) first, followed by remote targets with aligned online/offline and saved labels. Local access works without a Tailscale profile or SSH connection. It opens your `$SHELL` as a login shell (falling back to `/bin/sh`); new panes in that tab/window also run locally, even after you rename it. Exiting the shell closes that pane.
 
 `local` is reserved by `terminal` for this computer. Use the full `profile/local` target if a remote machine is also named local. Existing shortcuts open the same picker from local and remote tabs.

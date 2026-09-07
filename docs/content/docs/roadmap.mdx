@@ -1,29 +1,35 @@
 ---
 title: What's next
-description: A useful foundation today. A smoother remote workflow next.
+description: Available workflows and remaining work.
 icon: Route
 ---
 
 ## Available now
 
-- Arbitrary account profiles with independent tsnet identities.
-- Host discovery across accounts.
-- OpenSSH transport and per-host configuration.
-- Herdr attachment, session listing, and a combined local view with `herdr open`.
-- Native `orca serve` runtime pairing and SSH-tunnel reconnection.
-- tmux or Zellij terminals with a searchable box picker and saved backend preference.
-- TCP port forwarding, ranges, named HTTP routing and localhost redirect rewriting.
-- macOS and Linux builds, with release and installer tooling.
+- Interactive dashboard on `tailmux`, plus scriptable status output.
+- Arbitrary Tailscale account profiles with independent tsnet identities.
+- Cross-account host discovery, SSH settings and local/remote terminals.
+- tmux or Zellij with a box picker, saved backend preference and rename-safe tab routing.
+- Herdr attachment, session listing and a combined local view.
+- Native Orca runtime pairing, tunnel reconnection and reviewable user-service setup.
+- Remote prerequisite checks and explicit tmux/port-inspection package installation.
+- Remote TCP port/process discovery and forwarding from a picker.
+- TCP ranges, named HTTP routing, localhost redirects and saved forwarding groups.
+- Bounded SSH reconnection and saved-forward restoration at daemon startup.
+- Managed Cloudflare named tunnels and ngrok endpoints with an explicit public HTTPS origin.
+- macOS and Linux release tooling.
 
-## Proposed: public preview URLs
+## Still manual
 
-Wrap Cloudflare or ngrok for a selected forwarded port, with explicit temporary versus stable URLs, connector lifecycle management and public HTTPS origin handling. Provider flags are not implemented yet. The [forwarding guide](/docs/forwarding#public-urls-with-cloudflare-or-ngrok) covers the manual workflow available today.
+Provider account authentication, stable domain ownership and Cloudflare DNS routing must be configured before publishing a public URL. Herdr and Orca application installation and provider-agent authentication remain separate. Orca firewall persistence and boot enablement depend on the host's firewall manager.
 
-## Planned: process picker
+Saved forwarding does not install an operating-system autostart service. A public URL routed through a laptop is unavailable while that laptop sleeps. Redirect rewriting does not change hardcoded frontend code or register OAuth callbacks.
 
-Discover listening ports and the processes that own them, then choose what to forward. Start with SSH and existing host tools; add a host helper if continuous updates justify it.
+## Future: continuous process discovery
 
-## Planned: task dispatch
+The ports picker takes a snapshot using existing SSH tools. Continuous monitoring and automatic forwarding as processes start would need explicit lifecycle rules.
+
+## Future: task dispatch
 
 Create isolated checkouts and launch agents on a selected host. A cross-host handoff should transfer code and context explicitly; it should not pretend to migrate a live process.
 

@@ -1,0 +1,50 @@
+---
+title: Discover ports and processes
+description: Find remote TCP listeners, select one, and forward it locally.
+icon: ScanSearch
+---
+
+Tailmux can inspect a Linux host for listening TCP ports before you create a forward:
+
+```bash
+tailmux ports lab/worker
+```
+
+The table includes the remote bind address and process name when the operating system allows it. Use JSON for scripts:
+
+```bash
+tailmux ports lab/worker --json
+```
+
+## Pick and forward a port
+
+Open the searchable port picker with:
+
+```bash
+tailmux ports lab/worker --pick
+```
+
+The picker prints the selected port. Add `--forward` to create an unnamed local forward immediately:
+
+```bash
+tailmux ports lab/worker --forward
+```
+
+`--forward` uses the same port locally and remotely. Inspect the resulting route with `tailmux forwards` and stop it with `tailmux unforward <id>`. For a different local port, range, or named HTTP route, use the full [`tailmux forward`](/docs/forwarding) command.
+
+The picker runs through local `fzf`. Tailmux ignores `FZF_DEFAULT_*` customizations for this picker so its selection format remains predictable. Press Escape to cancel without creating a forward.
+
+## Remote requirements and limits
+
+Port discovery uses `ss` from `iproute2`, with `lsof` as a fallback. It currently targets Linux hosts and lists TCP listeners only. Check and install the supported prerequisite with:
+
+```bash
+tailmux setup check lab/worker
+tailmux setup install lab/worker --ports
+```
+
+Linux may hide process ownership from an unprivileged SSH user. In that case the port and bind address still appear while the process column is empty. Tailmux does not elevate port discovery.
+
+The reported bind address is observational. A Tailmux forward always connects to `127.0.0.1` on the remote host. Services bound to loopback or a wildcard address are normally reachable; a service bound only to another specific interface address is not. Reconfigure that service to listen on loopback or a wildcard address before forwarding it.
+
+Discovery does not prove that an application speaks HTTP or that the listener will remain alive. Raw forwards carry arbitrary TCP; named routes require HTTP. See [Port forwarding and local URLs](/docs/forwarding) for those differences.

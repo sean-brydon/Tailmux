@@ -6,6 +6,36 @@ icon: Terminal
 
 Targets use `<profile>/<hostname>`. Optional short aliases are read from your configuration.
 
+## Dashboard and status
+
+```bash
+tailmux
+tailmux dashboard
+tailmux monitor [--json]
+tailmux monitor claude-setup
+tailmux monitor claude-statusline
+tailmux status
+tailmux status --json
+```
+
+Bare `tailmux` opens the interactive dashboard in a terminal and prints help when redirected. The dashboard configures profiles, SSH hosts, forwards, public URLs and terminal defaults, and opens terminals and setup workflows. Status inspection does not start the daemon. See [dashboard controls](/docs/dashboard).
+
+## Host setup and port discovery
+
+```bash
+tailmux setup check lab/worker
+tailmux setup check --all --json
+tailmux setup install lab/worker --tmux --ports
+tailmux setup orca lab/worker --local-port 16768
+tailmux setup orca lab/worker --local-port 16768 --apply
+tailmux ports lab/worker
+tailmux ports lab/worker --json
+tailmux ports lab/worker --pick
+tailmux ports lab/worker --forward
+```
+
+`setup install` requires explicit package flags and runs remote sudo interactively. `setup orca` accepts `--remote-port` (default 6768) and `--replace` with `--apply` for an existing stopped unit. It does not install Orca or configure persistent firewall rules. `ports` lists TCP listeners and visible process names; `--pick` prints a selected port, while `--forward` forwards it to the same local port. See [host setup](/docs/setup) and [ports](/docs/ports).
+
 ## Account setup
 
 | Command | Purpose |
@@ -72,6 +102,7 @@ tailmux forward lab/worker 3000
 tailmux forward lab/worker 3000-3005 --name worker.localhost
 tailmux forward other/builder 3000-3005 --name builder.localhost
 tailmux forward lab/worker 8080:3000,9090:9000 --json
+tailmux forward --resume <saved-name>
 tailmux forwards [--json]
 tailmux unforward <id>
 ```
@@ -83,14 +114,18 @@ Ports accept individual numbers, inclusive ranges, comma-separated lists and `lo
 | `--name NAME` | Enable hostname-based HTTP routing; different names can share a port |
 | `--no-rewrite` | Disable redirect, JSON URL, cookie, Origin and Referer rewriting |
 | `--json` | Print the created forward as JSON, including its ID |
+| `--save NAME` | Save this group for restoration when the daemon starts |
+| `--cloudflare TUNNEL` | Manage a named Cloudflare tunnel for one port; requires `--url` |
+| `--ngrok` | Manage an ngrok endpoint for one port; requires `--url` |
+| `--url https://HOST` | Explicit public HTTPS origin used for the tunnel and rewriting |
 
 Without a name, forwarding carries raw TCP to remote loopback. With a name, the HTTP proxy rewrites direct localhost redirects and JSON URLs for ports in the group, and removes loopback cookie domains while retaining security attributes. JSON rewriting is limited to 2 MiB. HTML, JavaScript, HTTPS URLs and external OAuth callback parameters are not rewritten. OAuth allowlists and application HTTPS requirements may still need configuration.
 
 All listeners bind to `127.0.0.1`. Modern browsers resolve `.localhost` to loopback. Custom names such as `worker.local` require DNS or a hosts-file entry (`127.0.0.1 worker.local`); Tailmux does not modify system DNS. Raw forwards cannot share a port. Port conflicts reject the new group without disturbing existing forwards.
 
-Forwards keep running after the CLI exits. `tailmux unforward <id>` stops one; `tailmux stop` stops all local networking. Forwards are not restored after daemon shutdown. SSH failures appear in `tailmux forwards`; recreate a failed forward to reconnect. SSH must permit local forwarding, and your agent must be unlocked for batch authentication.
+Forwards keep running after the CLI exits. Use `--save NAME` to restore a group when the daemon next starts. `tailmux unforward <id-or-saved-name>` stops and forgets a group; `tailmux stop` stops networking while retaining saved definitions. SSH disconnections retry with capped backoff and remain visible in `tailmux forwards`. SSH must permit local forwarding, and your agent must be unlocked for batch authentication.
 
-See the [forwarding guide](/docs/forwarding) for DNS setup, rewrite boundaries, lifecycle details and publishing a selected port with Cloudflare or ngrok. Provider flags are not implemented; the guide uses separate tunnel clients.
+See the [forwarding guide](/docs/forwarding) for DNS setup, rewrite boundaries, lifecycle details and publishing a selected port with Cloudflare or ngrok. Provider integration supports `--cloudflare TUNNEL --url https://host` or `--ngrok --url https://host` for a single port. Configure provider credentials and the stable hostname first.
 
 ## Local runtime
 

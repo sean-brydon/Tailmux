@@ -28,10 +28,11 @@ type request struct {
 	Target  string       `json:"target,omitempty"`
 }
 type response struct {
-	Forwards []ForwardInfo    `json:"forwards,omitempty"`
-	Kind     string           `json:"kind"`
-	Message  string           `json:"message,omitempty"`
-	Hosts    []discoveredHost `json:"hosts,omitempty"`
+	Forwards     []ForwardInfo    `json:"forwards,omitempty"`
+	Capabilities []string         `json:"capabilities,omitempty"`
+	Kind         string           `json:"kind"`
+	Message      string           `json:"message,omitempty"`
+	Hosts        []discoveredHost `json:"hosts,omitempty"`
 }
 type discoveredHost struct {
 	Target  string `json:"target"`
@@ -153,6 +154,7 @@ func serve(dir string) error {
 	defer cancel()
 	d := &daemon{dir: dir, nodes: map[string]*tsnet.Server{}, stop: cancel}
 	d.forwards = newForwardManager(ctx, dir)
+	go d.forwards.restore()
 	defer d.forwards.close()
 	go func() { <-ctx.Done(); ln.Close() }()
 	defer func() {
@@ -193,12 +195,16 @@ func (d *daemon) handle(parent context.Context, c net.Conn) {
 		send(c, "ok", "ready")
 		return
 	}
+	if req.Op == "capabilities" {
+		json.NewEncoder(c).Encode(response{Kind: "capabilities", Capabilities: []string{"saved-forwards-v1", "public-forwards-v1", "loopback-forwards-v1"}})
+		return
+	}
 	if req.Op == "stop" {
 		send(c, "ok", "Tailmux daemon stopped")
 		d.stop()
 		return
 	}
-	if req.Op == "forward" || req.Op == "forwards" || req.Op == "unforward" {
+	if req.Op == "forward" || req.Op == "forwards" || req.Op == "unforward" || req.Op == "resume-forward" {
 		var infos []ForwardInfo
 		var err error
 		switch req.Op {
@@ -214,6 +220,10 @@ func (d *daemon) handle(parent context.Context, c net.Conn) {
 			infos = d.forwards.list()
 		case "unforward":
 			err = d.forwards.remove(req.Target)
+		case "resume-forward":
+			var info ForwardInfo
+			info, err = d.forwards.resume(req.Target)
+			infos = []ForwardInfo{info}
 		}
 		if err != nil {
 			fail(err)
