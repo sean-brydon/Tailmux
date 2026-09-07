@@ -23,7 +23,7 @@ func TestDashboardLayoutAcrossPanels(t *testing.T) {
 					t.Fatal("layout exceeds terminal")
 				}
 				if section == 4 && size[0] >= 100 {
-					if !strings.Contains(v, "ACCOUNT LIMITS") || !strings.Contains(v, "42%") {
+					if !strings.Contains(v, "Codex usage") || !strings.Contains(v, "42%") {
 						t.Fatal("quotas lost below long sessions")
 					}
 					if !strings.Contains(v, "q quit") {
@@ -32,5 +32,18 @@ func TestDashboardLayoutAcrossPanels(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestMonitorConnectionMessageIsActionable(t *testing.T) {
+	m := dashboardModel{monitor: MonitorSnapshot{Boxes: []BoxMonitor{{Target: "personal/dev", Sessions: MonitorSessions{Errors: []MonitorSourceError{{Source: "orca", Message: "Orca runtime unavailable"}}}}}}}
+	view := m.monitorDetail(90)
+	for _, text := range []string{"Runtime connections", "Orca · Unreachable", "Check runtime and restore its tunnel"} {
+		if !strings.Contains(view, text) {
+			t.Fatal("missing", text)
+		}
+	}
+	if strings.Contains(view, "unknown states are not idle") {
+		t.Fatal("explanatory footer returned")
 	}
 }

@@ -325,7 +325,7 @@ func httpForward(s ForwardSpec, p PortMap, dial func(context.Context, int) (net.
 			}
 		}
 	}, ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-		http.Error(w, "Tailmux could not reach the remote application", http.StatusBadGateway)
+		serveAppUnavailable(w, r, p.Remote)
 	}}
 	if s.Rewrite {
 		proxy.ModifyResponse = func(r *http.Response) error { return rewriteResponse(r, s) }

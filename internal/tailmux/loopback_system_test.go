@@ -48,6 +48,9 @@ func TestLoopbackSystemSetupRollsBackNewAlias(t *testing.T) {
 	if err == nil || len(commands) != 2 || !strings.Contains(commands[0], "address add") || !strings.Contains(commands[1], "address del") {
 		t.Fatalf("alias was not rolled back: %v %#v", err, commands)
 	}
+	if _, statErr := os.Stat(filepath.Join(filepath.Dir(hosts), ".tailmux-loopback.lock")); statErr != nil {
+		t.Fatalf("stable lock file was not created: %v", statErr)
+	}
 }
 
 func TestUpdateLoopbackHostsRejectsConflict(t *testing.T) {
@@ -58,6 +61,18 @@ func TestUpdateLoopbackHostsRejectsConflict(t *testing.T) {
 	_, _, err = updateLoopbackHosts([]byte("127.77.0.2 dev.test\n127.88.0.2 dev.test\n"), "127.77.0.2", "dev.test")
 	if err == nil {
 		t.Fatal("conflict after equivalent mapping accepted")
+	}
+	_, _, err = updateLoopbackHosts([]byte("127.88.0.2 DEV.TEST.\n"), "127.77.0.2", "dev.test")
+	if err == nil {
+		t.Fatal("case and trailing-dot conflict accepted")
+	}
+}
+
+func TestUpdateLoopbackHostsNormalizesTrailingDot(t *testing.T) {
+	contents := []byte("127.77.0.2 DEV.TEST.\n")
+	updated, changed, err := updateLoopbackHosts(contents, "127.77.0.2", "dev.test.")
+	if err != nil || changed || string(updated) != string(contents) {
+		t.Fatalf("equivalent DNS spelling was not recognized: %t %v %q", changed, err, updated)
 	}
 }
 

@@ -14,7 +14,7 @@ At most 100 ports per group. Options follow the host; ports may surround options
   --name NAME     Serve HTTP by hostname; multiple names can share a local port
   --no-rewrite    Disable redirect, JSON URL, cookie, Origin and Referer rewriting
   --json          Print the created forward as JSON, including its ID
-  --save NAME     Restore this group when the daemon next starts
+  --save NAME     Choose a friendly saved name (all groups persist automatically)
   --cloudflare TUNNEL  Manage a locally configured named tunnel; requires --url
   --ngrok         Manage an ngrok endpoint; requires --url
   --url HTTPS_URL Explicit public origin (one port only; provider setup required)
@@ -64,7 +64,7 @@ Detach: Ctrl+B, D (tmux), or Ctrl+O, D (Zellij).
 func printCommandHelp(command string) error {
 	switch command {
 	case "dashboard":
-		fmt.Println("Usage: tailmux dashboard\n\nBare tailmux also opens the dashboard in an interactive terminal.\n0 Monitor, 1–4 panels, Enter terminal, h hide box, H show hidden, a account, e host settings,\nf forward, p ports,\nc host check, i install prerequisites, u Orca setup, n start networking, q quit.")
+		fmt.Println("Usage: tailmux dashboard\n\nBare tailmux also opens the dashboard in an interactive terminal.\n0 Monitor, 1–4 panels, Enter terminal, h hide box, H show hidden, a account, e host settings,\nf forward, Shift+L Setup loopback, p ports,\nc host check, i install prerequisites, u Orca setup, n start networking, q quit.")
 		return nil
 	case "monitor":
 		fmt.Println("Usage: tailmux monitor [--json]\n       tailmux monitor claude-setup\n       tailmux monitor claude-statusline\n\nInspect RAM, Orca/Herdr sessions and available Codex/Claude usage on local and saved boxes.\nRead-only; does not start networking. The dashboard opens on 0 Monitor.")
@@ -73,7 +73,7 @@ func printCommandHelp(command string) error {
 		fmt.Println("Usage: tailmux status [--json]\n\nInspect boxes, forwards, saved Orca routes and local tools without starting networking.")
 		return nil
 	case "loopback":
-		fmt.Println("Usage: tailmux loopback setup <host> [--name NAME]\n       tailmux loopback list\n\nAssign a stable dedicated 127.77.x.y loopback address to a canonical box and map\nits private HTTP hostname in /etc/hosts. The default name is <host>.test. macOS\nadds a loopback alias through sudo; rerun setup after reboot before resuming named\nforwards. .localhost is rejected because browsers force it to 127.0.0.1.")
+		fmt.Println("Usage: tailmux loopback setup <host> [--name NAME]\n       tailmux loopback list\n\nAssign a stable dedicated 127.77.x.y loopback address to a canonical box and map\nits private HTTP hostname in /etc/hosts. Setup previews every local change and asks\nApply changes? y/N before sudo. The default name is <host>.test. On macOS, setup installs a launchd job\nto restore the alias automatically at boot. .localhost is rejected because\nbrowsers force it to 127.0.0.1.")
 		return nil
 	case "setup":
 		fmt.Println("Usage: tailmux setup check <host|--all> [--json]\n       tailmux setup install <host> [--tmux] [--ports]\n       tailmux setup orca <host> [--local-port PORT] [--remote-port PORT] [--apply] [--replace]\n\nInstall requires explicit package flags. Orca setup defaults to a review-only plan;\napply writes a stopped, disabled user service. Orca installation and persistent\nfirewall configuration are separate. Replace backs up an existing stopped unit.")

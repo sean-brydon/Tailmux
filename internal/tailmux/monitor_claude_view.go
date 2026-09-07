@@ -7,9 +7,13 @@ import (
 )
 
 func claudeMonitorLines(sample *ClaudeMonitorSample, unavailable string, width int) []string {
-	lines := []string{dashMuted.Render("CLAUDE · SESSION OBSERVATIONS")}
+	lines := []string{dashSection("Claude usage", width)}
 	if sample == nil {
-		lines = append(lines, dashMuted.Render(dashFit(unavailable, width)))
+		message := unavailable
+		if strings.Contains(message, "no status-line sample") {
+			message = "Waiting for a Claude session sample"
+		}
+		lines = append(lines, dashMuted.Render(dashFit(message, width)))
 		return append(lines, dashMuted.Render("Enable on the box: tailmux monitor claude-setup"))
 	}
 	state := "last observed"

@@ -1,6 +1,7 @@
 package tailmux
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -61,6 +62,16 @@ func allocateLoopback(bindings loopbackConfig, target string) string {
 	return ""
 }
 func namedLoopbackAddress(dir, target, name string) (string, error) {
+	if !strings.Contains(target, "/") {
+		cfg, err := loadConfig(dir)
+		if err != nil {
+			return "", err
+		}
+		target, err = canonicalTarget(cfg, target)
+		if err != nil {
+			return "", err
+		}
+	}
 	// .localhost is resolved internally by browsers and cannot be isolated reliably.
 	name = strings.ToLower(name)
 	if name == "localhost" || strings.HasSuffix(name, ".localhost") {
@@ -147,7 +158,21 @@ func loopbackCLI(dir string, cfg Config, args []string) error {
 	if ip == "" {
 		return fmt.Errorf("no loopback addresses available")
 	}
-	fmt.Printf("Configure %s → %s for %s\n", name, ip, target)
+	fmt.Printf("Box: %s\nHostname: %s\nDedicated local address: %s\n\n", target, name, ip)
+	fmt.Printf("This will add a loopback interface address and map %s to %s in /etc/hosts.\n", name, ip)
+	fmt.Println("Sudo is needed because these are protected OS network settings. Only the small setup helper runs as root; Tailmux networking continues as your user.")
+	fmt.Println("Existing applications keep their ports on 127.0.0.1. A wildcard listener on 0.0.0.0 may still conflict.")
+	if loopbackOS == "darwin" {
+		fmt.Println("Also installs a root-owned launchd job in /Library/LaunchDaemons to restore this address at every boot. It runs /sbin/ifconfig once; it does not start Tailmux or a forward.")
+	}
+	fmt.Print("Apply these changes? [y/N] ")
+	answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("confirmation requires an interactive terminal")
+	}
+	if strings.ToLower(strings.TrimSpace(answer)) != "y" && strings.ToLower(strings.TrimSpace(answer)) != "yes" {
+		return fmt.Errorf("setup cancelled; no system changes made")
+	}
 	if err = configureLoopbackSystem(ip, name); err != nil {
 		return fmt.Errorf("loopback setup needs administrator access; rerun this command in your terminal: %w", err)
 	}

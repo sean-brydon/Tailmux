@@ -44,7 +44,7 @@ The default configuration is empty. `login` adds profiles; `hosts add` saves mac
 
 Generated multiplexer settings belong to Tailmux's dedicated session. Zellij's generated file is rewritten on launch; editing it is not a persistent customization interface. Existing remote shells retain their running wrapper until restarted.
 
-Ordinary forward groups are runtime state. `forward --save NAME` stores a definition in private `forwards.json` and restores it when the daemon starts. `unforward` removes the saved definition; `stop` preserves it. Provider credentials remain managed by the provider CLI; connector logs and generated configuration are private files under `public-tunnels/`. Custom forwarding names do not change system DNS.
+Ordinary forward groups are runtime state. `forward --save NAME` stores a definition in private `forwards.json` and restores it when the daemon starts. `unforward` removes the saved definition; `stop` preserves it. Provider credentials remain managed by the provider CLI; connector logs and generated configuration are private files under `public-tunnels/`. Private named forwarding also stores per-box assignments in `loopbacks.json`; `tailmux loopback setup` uses those assignments to update this computer's loopback interface and `/etc/hosts` with administrator access.
 
 The interactive `tailmux` dashboard configures profiles, saved SSH hosts and the terminal backend without editing JSON manually. Terminal target metadata is separate from visible tab names. See [dashboard](/docs/dashboard) and [terminal routing](/docs/terminal).
 
@@ -58,6 +58,9 @@ daemon.sock          Private local control socket
 daemon.log           Runtime diagnostics
 config.lock          Serializes configuration changes
 daemon.lock          Prevents duplicate daemons
+forwards.json        Saved forward definitions
+loopbacks.json       Dedicated per-box loopback addresses and names
+loopbacks.lock       Serializes loopback assignment updates
 terminal/
   zellij.kdl         Generated local Zellij configuration
   zellij-shell       Default-shell wrapper for remote panes
@@ -79,7 +82,7 @@ tailmux stop
 tailmux doctor personal/devbox
 ```
 
-The second command starts a new daemon automatically. A stop closes active local transports but preserves the identity files. Herdr and dedicated tmux shells continue on remote hosts. Active forwards stop and must be recreated.
+The second command starts a new daemon automatically. A stop closes active local transports but preserves the identity files and saved forward definitions. Herdr and dedicated tmux shells continue on remote hosts. Forwards save automatically and restore when networking starts. On macOS, loopback setup installs a boot job to restore dedicated address aliases.
 
 Zellij reuses a **running** local session when you detach. Closing a tab with Ctrl+T, then X removes it. After closing the last tab, the next `tailmux terminal` starts a fresh session. Tailmux disables disk-layout resurrection so previously closed tabs cannot return from an old snapshot. Remote tmux shells remain on their hosts; this does not stop remote processes.
 

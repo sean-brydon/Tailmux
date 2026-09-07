@@ -87,12 +87,14 @@ The last command saves a default without launching. Alt+B opens the picker; Zell
 With an application listening on remote port 3000:
 
 ```bash
-tailmux forward personal/devbox 3000 --name devbox.localhost
-tailmux forward work/buildbox 3000 --name buildbox.localhost
+tailmux loopback setup personal/devbox
+tailmux loopback setup work/buildbox
+tailmux forward personal/devbox 3000 --name devbox.test
+tailmux forward work/buildbox 3000 --name buildbox.test
 tailmux forwards
 ```
 
-Open `http://devbox.localhost:3000` or `http://buildbox.localhost:3000`. Names share the same local port. Omit `--name` for raw TCP at `localhost:3000`; use `3000-3005` for a range. Custom `.local` names need a loopback DNS or hosts-file entry. Named mode rewrites direct localhost redirects, but OAuth callback allowlists and HTTPS requirements may still need application configuration. Stop a group with `tailmux unforward <id>`. See [forwarding](/docs/forwarding).
+Open `http://devbox.test:3000` or `http://buildbox.test:3000`. Loopback setup gives each box a dedicated local address, so both names can use port 3000. It needs administrator access once on this computer and restores the alias automatically at macOS boot. Omit `--name` for raw TCP at `localhost:3000`; use `3000-3005` for a range. Named mode rewrites direct localhost redirects, but `.test` HTTP is not automatically a secure context and OAuth/HTTPS requirements may still need application configuration. Stop a group with `tailmux unforward <id>`. See [forwarding](/docs/forwarding).
 
 ## Bring both boxes into one Herdr view
 

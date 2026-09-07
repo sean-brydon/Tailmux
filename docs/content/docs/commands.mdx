@@ -95,12 +95,25 @@ tailmux terminal --default tmux
 
 See the [terminal guide](/docs/terminal) for pane naming, locked mode and remote-session behavior.
 
+## Isolated loopback names
+
+```bash
+tailmux loopback setup lab/worker
+tailmux loopback setup lab/worker --name worker.test
+tailmux loopback list
+```
+
+`setup` previews the dedicated address, hostname and local operating-system changes, then asks `Apply changes? y/N` before invoking sudo. The default name is the host component plus `.test`. Assignments are stored in private `loopbacks.json`; system changes affect only this computer. `list` needs no administrator access.
+
 ## Port forwarding
 
 ```bash
 tailmux forward lab/worker 3000
-tailmux forward lab/worker 3000-3005 --name worker.localhost
-tailmux forward other/builder 3000-3005 --name builder.localhost
+tailmux loopback setup lab/worker --name worker.test
+tailmux loopback setup other/builder --name builder.test
+tailmux loopback list
+tailmux forward lab/worker 3000-3005 --name worker.test
+tailmux forward other/builder 3000-3005 --name builder.test
 tailmux forward lab/worker 8080:3000,9090:9000 --json
 tailmux forward --resume <saved-name>
 tailmux forwards [--json]
@@ -121,11 +134,13 @@ Ports accept individual numbers, inclusive ranges, comma-separated lists and `lo
 
 Without a name, forwarding carries raw TCP to remote loopback. With a name, the HTTP proxy rewrites direct localhost redirects and JSON URLs for ports in the group, and removes loopback cookie domains while retaining security attributes. JSON rewriting is limited to 2 MiB. HTML, JavaScript, HTTPS URLs and external OAuth callback parameters are not rewritten. OAuth allowlists and application HTTPS requirements may still need configuration.
 
-All listeners bind to `127.0.0.1`. Modern browsers resolve `.localhost` to loopback. Custom names such as `worker.local` require DNS or a hosts-file entry (`127.0.0.1 worker.local`); Tailmux does not modify system DNS. Raw forwards cannot share a port. Port conflicts reject the new group without disturbing existing forwards.
+Raw TCP and managed public listeners bind to `127.0.0.1`. Private named listeners require `tailmux loopback setup <host> [--name NAME]`; the default name is `<host>.test`. Setup assigns a dedicated `127.77.x.y` address per canonical box and updates this computer's `/etc/hosts`, allowing boxes to reuse a port. `.localhost` is rejected because browsers force it to `127.0.0.1`. On macOS, setup installs a launchd job to restore the address at boot. A wildcard `0.0.0.0` listener can still conflict.
 
 Forwards keep running after the CLI exits. Use `--save NAME` to restore a group when the daemon next starts. `tailmux unforward <id-or-saved-name>` stops and forgets a group; `tailmux stop` stops networking while retaining saved definitions. SSH disconnections retry with capped backoff and remain visible in `tailmux forwards`. SSH must permit local forwarding, and your agent must be unlocked for batch authentication.
 
 See the [forwarding guide](/docs/forwarding) for DNS setup, rewrite boundaries, lifecycle details and publishing a selected port with Cloudflare or ngrok. Provider integration supports `--cloudflare TUNNEL --url https://host` or `--ngrok --url https://host` for a single port. Configure provider credentials and the stable hostname first.
+
+`tailmux loopback list` reports the canonical box, assigned address and configured names. Loopback setup changes only the local computer and requires administrator access; it does not install anything remotely. After upgrading from the shared-loopback implementation, restart the old daemon with `tailmux stop`, configure the exact host/name for saved named forwards, and resume failed saved groups. A `.test` HTTP origin is not automatically a secure context, so some cookies, service workers and OAuth flows still require HTTPS or app configuration.
 
 ## Local runtime
 

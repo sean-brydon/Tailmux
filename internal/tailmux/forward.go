@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -315,7 +316,17 @@ func (m *forwardManager) add(s ForwardSpec) (ForwardInfo, error) {
 	<-m.restored
 	return m.addSpec(s, true, "", nil)
 }
+func persistentForwardSpec(s ForwardSpec) ForwardSpec {
+	if s.Save == "" {
+		data, _ := json.Marshal(s)
+		hash := sha256.Sum256(data)
+		s.Save = fmt.Sprintf("forward-%x", hash[:6])
+	}
+	return s
+}
+
 func (m *forwardManager) addSpec(s ForwardSpec, persist bool, replaceID string, replace *forwardGroup) (ForwardInfo, error) {
+	s = persistentForwardSpec(s)
 	if s.Name != "" && s.Public == nil {
 		expected, err := namedLoopbackAddress(m.dir, s.Target, s.Name)
 		if err != nil {
@@ -448,7 +459,7 @@ func (m *forwardManager) addSpec(s ForwardSpec, persist bool, replaceID string, 
 					handler := l.routes[strings.ToLower(name)]
 					m.mu.Unlock()
 					if handler == nil {
-						http.Error(w, "No Tailmux forward for this hostname", http.StatusMisdirectedRequest)
+						serveNoForward(w, r)
 						return
 					}
 					handler.ServeHTTP(w, r)
@@ -996,11 +1007,22 @@ func forwardCLI(dir string, args []string) error {
 			return fmt.Errorf("--url requires --cloudflare or --ngrok")
 		}
 		if s.Name != "" && s.Public == nil {
+			if !strings.Contains(s.Target, "/") {
+				cfg, loadErr := loadConfig(dir)
+				if loadErr != nil {
+					return loadErr
+				}
+				s.Target, err = canonicalTarget(cfg, s.Target)
+				if err != nil {
+					return err
+				}
+			}
 			s.BindAddress, err = namedLoopbackAddress(dir, s.Target, s.Name)
 			if err != nil {
 				return err
 			}
 		}
+		s = persistentForwardSpec(s)
 		if err = s.validate(); err != nil {
 			return err
 		}

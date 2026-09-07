@@ -26,6 +26,12 @@ func dashBadge(s string, warning bool) string {
 	}
 	return lipgloss.NewStyle().Foreground(color).Render(s)
 }
+func dashSection(title string, width int) string {
+	label := " " + title + " "
+	rule := strings.Repeat("─", max(0, width-lipgloss.Width(label)-1))
+	return dashTitle.Render("▎"+label) + lipgloss.NewStyle().Foreground(dashLine).Render(rule)
+}
+
 func dashMeter(percent float64, width int) string {
 	percent = max(0, min(100, percent))
 	filled := int(percent*float64(width)/100 + .5)
@@ -59,7 +65,7 @@ func (m dashboardModel) monitorDetail(width int) string {
 	if !b.CheckedAt.IsZero() {
 		lines = append(lines, dashMuted.Render("Updated "+b.CheckedAt.Local().Format("15:04:05")+"  ·  refresh 15s"))
 	}
-	lines = append(lines, "", dashMuted.Render("MEMORY"))
+	lines = append(lines, "", dashSection("Memory", width))
 	if b.Memory != nil {
 		lines = append(lines, fmt.Sprintf("%s  %3.0f%%", dashMeter(b.Memory.Percent, min(28, max(8, width-12))), b.Memory.Percent),
 			dashMuted.Render(fmt.Sprintf("%.1f GiB used / %.1f GiB total", float64(b.Memory.UsedBytes)/(1<<30), float64(b.Memory.TotalBytes)/(1<<30))))
@@ -68,7 +74,7 @@ func (m dashboardModel) monitorDetail(width int) string {
 	}
 	lines = append(lines, "")
 	lines = append(lines, m.boxForwardLines(b.Target)...)
-	lines = append(lines, "", dashMuted.Render("ACCOUNT LIMITS"))
+	lines = append(lines, "", dashSection("Codex usage", width))
 	if len(b.Usage) == 0 {
 		lines = append(lines, dashMuted.Render(dashFit(b.UsageError, width)))
 	}
@@ -90,7 +96,7 @@ func (m dashboardModel) monitorDetail(width int) string {
 	}
 	lines = append(lines, dashMuted.Render("Default CLI account · limits may be shared"), "")
 	lines = append(lines, claudeMonitorLines(b.Claude, b.ClaudeError, width)...)
-	lines = append(lines, "", dashMuted.Render(fmt.Sprintf("SESSIONS & AGENTS  ·  %d", len(b.Sessions.Rows))))
+	lines = append(lines, "", dashSection(fmt.Sprintf("Sessions & agents · %d", len(b.Sessions.Rows)), width))
 	if len(b.Sessions.Rows) == 0 {
 		lines = append(lines, dashMuted.Render("No sessions reported"))
 	}
@@ -134,9 +140,31 @@ func (m dashboardModel) monitorDetail(width int) string {
 			lines = append(lines, dashMuted.Render("  "+dashFit(strings.Join(info, " · "), width-2)))
 		}
 	}
-	lines = append(lines, "", dashMuted.Render("Unread updates are alerts; unknown states are not idle."))
+	if len(b.Sessions.Errors) > 0 {
+		lines = append(lines, "", dashSection("Runtime connections", width))
+	}
 	for _, e := range b.Sessions.Errors {
-		lines = append(lines, dashBadge(dashFit(e.Source+" · "+e.Message, width), true))
+		message := e.Source + " · " + e.Message
+		action := ""
+		if e.Source == "orca" {
+			if strings.Contains(e.Message, "no saved Orca environment") {
+				message = "Orca · Not connected"
+				if b.Target != "local" {
+					action = "o  Connect an Orca runtime"
+				}
+			} else if strings.Contains(e.Message, "runtime unavailable") {
+				message = "Orca · Unreachable"
+				if b.Target != "local" {
+					action = "s  Check runtime and restore its tunnel"
+				} else {
+					action = "Open Orca, then press r to refresh"
+				}
+			}
+		}
+		lines = append(lines, dashBadge(dashFit(message, width), true))
+		if action != "" {
+			lines = append(lines, dashMuted.Render(action))
+		}
 	}
 	return strings.Join(lines, "\n")
 }
@@ -280,7 +308,7 @@ func (m dashboardModel) polishedView() tea.View {
 	if message == "" || strings.HasPrefix(message, "Welcome.") {
 		message = "Select a machine to explore your workspace"
 	}
-	keys := "↑↓ select   enter open   / filter   h hide   H hidden   r refresh   q quit"
+	keys := "↑↓ select   enter open   / filter   h hide   L Setup loopback   r refresh   q quit"
 	if m.section == 1 {
 		keys = "↑↓ select   f new forward   v resume   x remove   r refresh   q quit"
 	}

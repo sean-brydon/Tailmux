@@ -418,3 +418,25 @@ func TestForwardWebSocketUpgrade(t *testing.T) {
 		t.Fatalf("%q %v", b, e)
 	}
 }
+
+func TestUnnamedForwardPersistsByDefault(t *testing.T) {
+	dir := t.TempDir()
+	spec := persistentForwardSpec(ForwardSpec{Target: "personal/dev", Name: "dev.test", Ports: []PortMap{{Local: 3001, Remote: 3001}}})
+	if spec.Save == "" {
+		t.Fatal("unnamed route remains temporary")
+	}
+	m := newForwardManager(context.Background(), dir)
+	defer m.cancel()
+	m.groups["test"] = &forwardGroup{info: ForwardInfo{Spec: spec}}
+	if err := m.saveLocked(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, savedForwardsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var specs []ForwardSpec
+	if err = json.Unmarshal(data, &specs); err != nil || len(specs) != 1 || specs[0].Save != spec.Save || specs[0].Ports[0].Remote != 3001 {
+		t.Fatal("route not persisted", string(data), err)
+	}
+}

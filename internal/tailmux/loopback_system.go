@@ -27,10 +27,11 @@ func validateLoopbackSystem(ip, name string) error {
 	if parsed == nil || parsed.To4() == nil || !parsed.IsLoopback() || ip == "127.0.0.1" || !strings.HasPrefix(ip, "127.") {
 		return fmt.Errorf("loopback address must be an IPv4 127/8 address other than 127.0.0.1")
 	}
-	if name == "" || len(name) > 253 || name != strings.ToLower(name) || net.ParseIP(name) != nil || !strings.Contains(name, ".") || name == "localhost" || strings.HasSuffix(name, ".localhost") {
+	canonicalName := strings.TrimSuffix(name, ".")
+	if canonicalName == "" || len(canonicalName) > 253 || canonicalName != strings.ToLower(canonicalName) || net.ParseIP(canonicalName) != nil || !strings.Contains(canonicalName, ".") || canonicalName == "localhost" || strings.HasSuffix(canonicalName, ".localhost") {
 		return fmt.Errorf("invalid loopback hostname %q", name)
 	}
-	for _, label := range strings.Split(name, ".") {
+	for _, label := range strings.Split(canonicalName, ".") {
 		if !safeName.MatchString(label) || strings.Contains(label, "_") || strings.HasSuffix(label, "-") {
 			return fmt.Errorf("invalid loopback hostname %q", name)
 		}
@@ -44,6 +45,7 @@ func updateLoopbackHosts(contents []byte, ip, name string) ([]byte, bool, error)
 	if err := validateLoopbackSystem(ip, name); err != nil {
 		return nil, false, err
 	}
+	name = strings.TrimSuffix(name, ".")
 	equivalent := false
 	for _, line := range strings.Split(string(contents), "\n") {
 		body := line
@@ -55,7 +57,7 @@ func updateLoopbackHosts(contents []byte, ip, name string) ([]byte, bool, error)
 			continue
 		}
 		for _, host := range fields[1:] {
-			if host != name {
+			if strings.ToLower(strings.TrimSuffix(host, ".")) != name {
 				continue
 			}
 			if fields[0] == ip {
@@ -161,6 +163,17 @@ func loopbackSystemSetup(ip, name string) error {
 	if err := validateLoopbackSystem(ip, name); err != nil {
 		return err
 	}
+	name = strings.TrimSuffix(name, ".")
+	lockPath := filepath.Join(filepath.Dir(loopbackHostsPath), ".tailmux-loopback.lock")
+	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return fmt.Errorf("open loopback setup lock: %w", err)
+	}
+	defer lock.Close()
+	if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("lock loopback setup: %w", err)
+	}
+	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 	contents, err := os.ReadFile(loopbackHostsPath)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", loopbackHostsPath, err)
@@ -188,6 +201,9 @@ func loopbackSystemSetup(ip, name string) error {
 			return fmt.Errorf("update %s: %w", loopbackHostsPath, err)
 		}
 	}
+	if err := installLoopbackBoot(ip); err != nil {
+		return fmt.Errorf("address is configured but boot restoration failed: %w", err)
+	}
 	return nil
 }
 
@@ -196,6 +212,7 @@ func configureLoopbackSystem(ip, name string) error {
 	if err := validateLoopbackSystem(ip, name); err != nil {
 		return err
 	}
+	name = strings.TrimSuffix(name, ".")
 	exe, err := os.Executable()
 	if err != nil {
 		return err

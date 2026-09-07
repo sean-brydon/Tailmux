@@ -33,6 +33,7 @@ Status refreshes every 15 seconds; `r` refreshes immediately. Opening the dashbo
 | `a` | Add a Tailscale account with a profile name you choose |
 | `e` | Save or edit a host's SSH target, user, address and port |
 | `f` | Configure a forward, optional saved name and public URL |
+| `L` (Shift+L) | Setup loopback for the selected remote box |
 | `p` | Inspect a remote box's ports and forward a selected port |
 | `c` | Check the selected remote host's prerequisites |
 | `i` | Install tmux and port-inspection packages on the selected remote host |
@@ -53,7 +54,11 @@ Hidden-box choices persist in your configuration. Hiding only changes the dashbo
 
 ## Forward setup
 
-The forward form accepts a remote target, ports such as `13000:3000`, an optional local HTTP hostname, and an optional saved name. Leaving the provider blank creates a private loopback forward. Empty fields show dimmed examples, including a hostname based on the selected box such as `devbox.localhost`; examples are not submitted as values. The focused field explains what to enter, and the Cloudflare tunnel field shows the login, tunnel creation and DNS routing commands.
+The forward form accepts a remote target, ports such as `13000:3000`, an optional local HTTP hostname, and an optional saved name. Leaving the provider blank creates a private forward. Empty fields show dimmed examples, including a hostname based on the selected box such as `devbox.test`; examples are not submitted as values. Private named forwards need an isolated hostname first.
+
+Select the remote box and press Shift+L. The loopback form shows its canonical target and default `.test` name. Enter temporarily leaves the dashboard for a review showing the assigned `127.77.x.y` address, `/etc/hosts` change, loopback alias and reason for administrator access. It applies nothing until you answer `y` to the `Apply changes? y/N` prompt; sudo is requested only after that confirmation. The assignment is stored in `loopbacks.json` under the Tailmux configuration directory and changes only this computer. You can run `tailmux loopback setup <host> [--name NAME]` directly for the same flow.
+
+After setup, use the same name in the forward form. The focused field explains what to enter, and the Cloudflare tunnel field shows the login, tunnel creation and DNS routing commands.
 
 For a public URL, choose `cloudflare` or `ngrok`, enter the HTTPS origin already configured in that provider account, and supply the named tunnel for Cloudflare. Submitting publishes the selected port through the provider. See [forwarding](/docs/forwarding) for provider setup, rewrite boundaries and lifecycle details.
 
@@ -117,3 +122,9 @@ To remove the Claude integration, remove the `statusLine` entry containing `tail
 Monitor and Boxes details show Tailmux port mappings for the selected remote box: local bind address, remote loopback port, named HTTP URL, public URL and connector state. The local computer shows all Tailmux listeners because it owns those bindings. Stopped or failed routes are labelled as configured endpoints rather than confirmed active listeners. Raw TCP forwards show their address without assuming HTTP.
 
 Press `2` to manage forwards or `p` to inspect listening ports on the remote machine. This section lists Tailmux-managed routes; it does not claim to inventory ports opened by every local application.
+
+Configured box addresses appear separately from running forwards, including before any ports are forwarded. The local overview includes all configured box hostnames. Consecutive port mappings are summarized as ranges to keep the overview compact.
+
+Runtime connection failures appear in a separate section with a next action. For a remote Orca runtime, `s` checks the runtime and restores its tunnel; `o` connects a runtime that has not been paired. Usage, memory and session sections have distinct headings.
+
+All newly created forwards persist automatically, including port ranges and local/public URL settings. The optional saved name is a friendly label, not a persistence switch. Daemon restart restores routes; removing a forward explicitly forgets it. Loopback address and hostname configuration remains saved separately.

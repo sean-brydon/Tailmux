@@ -27,6 +27,7 @@ type statusRuntime struct {
 	State     string `json:"state"`
 }
 type statusSnapshot struct {
+	Loopbacks    loopbackConfig  `json:"loopbacks"`
 	Daemon       bool            `json:"daemon_running"`
 	Boxes        []statusBox     `json:"boxes"`
 	Forwards     []ForwardInfo   `json:"forwards"`
@@ -55,6 +56,11 @@ func statusRequest(dir string, req request) (response, error) {
 }
 func collectStatus(dir string, cfg Config) statusSnapshot {
 	s := statusSnapshot{Boxes: []statusBox{{Target: "local", State: "this machine"}}, Forwards: []ForwardInfo{}, Runtimes: []statusRuntime{}, Dependencies: map[string]bool{}}
+	if bindings, err := readLoopbacks(dir); err != nil {
+		s.Errors = append(s.Errors, "Loopback settings: "+err.Error())
+	} else {
+		s.Loopbacks = bindings
+	}
 	for _, tool := range []string{"ssh", "tmux", "zellij", "fzf", "cloudflared", "ngrok", orcaExecutable()} {
 		_, err := exec.LookPath(tool)
 		s.Dependencies[tool] = err == nil

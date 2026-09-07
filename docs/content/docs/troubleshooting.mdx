@@ -63,21 +63,21 @@ Use an unnamed forward with the original port to preserve localhost URLs:
 tailmux forward personal/devbox 3000
 ```
 
-For named HTTP URLs, add `--name devbox.localhost`. Direct localhost redirects, JSON URLs and loopback cookie domains are rewritten by default. Rewrites cover only ports in that group; HTML/JavaScript, HTTPS URLs and external OAuth callback parameters are not rewritten. OAuth provider allowlists and Secure cookies can still require application or HTTPS setup. See [forwarding](/docs/forwarding).
+For named HTTP URLs, first run `tailmux loopback setup personal/devbox`, then add `--name devbox.test`. Direct localhost redirects, JSON URLs and loopback cookie domains are rewritten by default. Rewrites cover only ports in that group; HTML/JavaScript, HTTPS URLs and external OAuth callback parameters are not rewritten. `.test` over HTTP is not automatically a secure context, so OAuth provider allowlists, Secure cookies and service workers can still require application or HTTPS setup. See [forwarding](/docs/forwarding).
 
 ## Name does not resolve
 
-`.localhost` works in modern browsers. Other clients may need explicit resolution:
+Private named forwards use the dedicated address shown by:
 
 ```bash
-curl --resolve devbox.localhost:3000:127.0.0.1 http://devbox.localhost:3000
+tailmux loopback list
 ```
 
-A custom name such as `devbox.local` needs a hosts-file or DNS entry pointing to `127.0.0.1`. Tailmux does not register mDNS names. Listeners use IPv4 loopback.
+If the name is missing, rerun `tailmux loopback setup <host> --name <name>`. The command updates this computer's `/etc/hosts` and loopback interface with administrator access. `.localhost` cannot be used because browsers hardcode it to `127.0.0.1`; use the default `.test` name. On macOS, setup installs a LaunchDaemon to restore the alias at boot. Rerun setup once to upgrade an older configuration. Tailmux does not register mDNS names.
 
 ## Port conflict, 421, or 502
 
-Check `tailmux forwards` for existing groups. Different HTTP names can share a port, but raw TCP forwarding reserves it exclusively. A range conflict rejects the entire new group. Stop a group with `tailmux unforward <id>`.
+Check `tailmux forwards` and `tailmux loopback list` for existing groups and address assignments. Different boxes' named routes can share a port because they bind distinct `127.77.x.y` addresses. A process listening on wildcard `0.0.0.0:<port>` can still conflict with all of them. Raw TCP forwarding reserves its `127.0.0.1` port exclusively. A range conflict rejects the entire new group. Stop a group with `tailmux unforward <id>`.
 
 HTTP 421 means the request's Host header does not match a named forward on that port; use its configured URL. HTTP 502 means the proxy could not reach the remote application. Confirm the app is listening on remote `127.0.0.1` at the mapped port and that SSH permits local forwarding. A running tunnel does not prove an app is listening.
 
@@ -109,7 +109,9 @@ Earlier Tailmux versions automatically resurrected Zellij's last saved layout af
 
 ## New forwarding flags rejected after upgrading
 
-An already running daemon keeps executing its previous binary. New persistent/public forwarding features require the updated daemon. Detach from sessions as needed, run `tailmux stop`, and start networking again. This interrupts local SSH tunnels and forwards; remote persistent sessions remain running. Reconnect Orca with `tailmux orca status <host>`.
+An already running daemon keeps executing its previous binary. New persistent/public forwarding and isolated-loopback features require the updated daemon. Detach from sessions as needed, run `tailmux stop`, and start networking again. This interrupts local SSH tunnels and forwards; remote persistent sessions remain running. Reconnect Orca with `tailmux orca status <host>`.
+
+For a saved named forward from an older version, run `tailmux loopback setup <host> --name <saved-name-hostname>` before restarting or resuming it. If restoration already failed, use `tailmux forward --resume <saved-forward-name>` after setup.
 
 ## Public URL is unavailable
 
@@ -118,3 +120,9 @@ Check `tailmux forwards` for SSH and provider states. Install/authenticate the p
 ## Dashboard is missing or too small
 
 Bare `tailmux` opens the dashboard only when input and output are terminals. Use `tailmux dashboard` explicitly, or `tailmux status --json` in scripts. Resize to at least 40 columns by 12 rows. Tab moves through form fields, including fields below the visible area.
+
+## Lost-packet page
+
+A Tailmux “Right network. Wrong doorstep.” page means the request reached a Tailmux HTTP listener, but its hostname has no route there. Check the hostname and port against `tailmux forwards`. Browser requests receive a styled 421 page; API clients receive a plain-text error. Remote applications retain their own error pages.
+
+“Found your box. Nobody’s home.” is Tailmux’s 502 page: the forward exists, but the remote application could not be reached. Check the remote listening port and tunnel status. Browser requests get the recovery page; API requests keep a plain-text error.

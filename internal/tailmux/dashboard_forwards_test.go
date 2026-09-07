@@ -24,3 +24,19 @@ func TestBoxForwardDetailsScopeAndEndpoints(t *testing.T) {
 		t.Fatal("incorrect raw TCP display")
 	}
 }
+
+func TestBoxAddressesAndPortRangesAreCompact(t *testing.T) {
+	m := dashboardModel{snapshot: statusSnapshot{Loopbacks: loopbackConfig{"personal/dev": {Address: "127.77.1.2", Names: []string{"dev.test"}}}}}
+	if !strings.Contains(m.boxForwardDetails("local"), "dev.test") {
+		t.Fatal("configured address hidden without forwards")
+	}
+	ports := []PortMap{}
+	for p := 3000; p <= 3015; p++ {
+		ports = append(ports, PortMap{Local: p, Remote: p})
+	}
+	m.snapshot.Forwards = []ForwardInfo{{Spec: ForwardSpec{Target: "personal/dev", Name: "dev.test", BindAddress: "127.77.1.2", Ports: ports}, State: "running"}}
+	view := m.boxForwardDetails("personal/dev")
+	if !strings.Contains(view, "3000-3015") || strings.Count(view, "Local  http://") != 1 || len(strings.Split(view, "\n")) > 12 {
+		t.Fatal("range not summarized", view)
+	}
+}

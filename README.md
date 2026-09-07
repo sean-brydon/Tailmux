@@ -13,7 +13,7 @@ tailmux status --json    # scriptable, read-only snapshot
 
 The default **0 Monitor** panel shows RAM meters, Orca/Herdr session status, reported unread updates and available Codex account quotas and opt-in Claude telemetry for saved boxes. Limits belong to the default CLI account and may be shared across boxes; unsupported attention and quota data are marked unavailable. Use `tailmux monitor --json` for a one-shot report.
 
-A Charm-powered dashboard brings boxes, forwards, Orca routes and setup into one terminal. Press Enter to open a box in tmux/Zellij, `p` to select a remote port, `f` to configure a saved/public forward, `c` to check host setup, or `a` to add an account. `n` starts networking and saved forwards; quitting leaves existing sessions running. See [dashboard controls](docs/content/docs/dashboard.mdx).
+A Charm-powered dashboard brings boxes, forwards, Orca routes and setup into one terminal. Press Enter to open a box in tmux/Zellij, `p` to select a remote port, `f` to configure a saved/public forward, Shift+L to review isolated loopback setup, `c` to check host setup, or `a` to add an account. `n` starts networking and saved forwards; quitting leaves existing sessions running. See [dashboard controls](docs/content/docs/dashboard.mdx).
 
 Bare `tailmux` prints help when input/output is redirected. `tailmux dashboard` requires an interactive terminal.
 

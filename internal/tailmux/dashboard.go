@@ -237,6 +237,13 @@ func (m *dashboardModel) startForm(kind string) {
 	}
 	f := &dashboardForm{kind: kind}
 	switch kind {
+	case "loopback":
+		_, alias, _ := strings.Cut(target, "/")
+		name := ""
+		if alias != "" {
+			name = strings.ReplaceAll(alias, "_", "-") + ".test"
+		}
+		f.fields = []dashboardField{{"Target (profile/host)", target}, {"Local hostname", name}}
 	case "account":
 		f.fields = []dashboardField{{"Profile name", ""}}
 	case "host":
@@ -278,6 +285,9 @@ func (m *dashboardModel) startForm(kind string) {
 
 // Examples are presentation only: an empty optional field stays empty on submit.
 func dashboardFieldGuide(f dashboardForm, index int) (placeholder, hint string) {
+	if f.kind == "loopback" {
+		return "devbox.test", "Creates a dedicated local IP and an /etc/hosts entry. Enter opens a review and confirmation in your terminal; sudo is required only for these OS settings. No forward is started."
+	}
 	if f.kind != "forward" {
 		return "", ""
 	}
@@ -300,7 +310,7 @@ func dashboardFieldGuide(f dashboardForm, index int) (placeholder, hint string) 
 		}
 		return host + ".test", "Private named routes need `tailmux loopback setup <target> --name <name>` first. Each box gets its own 127.77.x.y address; .localhost cannot provide that isolation. Blank means raw TCP on localhost."
 	case 3:
-		return host + "-web", "Optional saved name. Restores when networking starts; unforward removes it."
+		return host + "-web", "Optional friendly name. All forwards save automatically and restore when networking starts; unforward removes them."
 	case 4:
 		return "leave blank, cloudflare, or ngrok", "Blank keeps the forward private. Cloudflare needs a locally managed named tunnel and DNS route; ngrok needs an authenticated account/domain."
 	case 5:
@@ -320,6 +330,11 @@ func dashboardFormArgs(f dashboardForm) ([]string, error) {
 		values[i] = strings.TrimSpace(v.value)
 	}
 	switch f.kind {
+	case "loopback":
+		if values[0] == "" || values[1] == "" {
+			return nil, fmt.Errorf("enter a remote target and hostname")
+		}
+		return []string{"loopback", "setup", values[0], "--name", values[1]}, nil
 	case "account":
 		if !safeName.MatchString(values[0]) {
 			return nil, fmt.Errorf("enter a profile name using letters, numbers, dots, underscores or hyphens")
@@ -524,7 +539,7 @@ func (m dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.message = err.Error()
 					return m, nil
 				}
-				interactive := m.form.kind == "account"
+				interactive := m.form.kind == "account" || m.form.kind == "loopback"
 				m.form = nil
 				m.busy = true
 				m.message = "Running tailmux " + strings.Join(args, " ")
@@ -636,6 +651,12 @@ func (m dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.startForm("host")
 		case "f":
 			m.startForm("forward")
+		case "L", "shift+l":
+			if m.target() == "" || m.target() == "local" {
+				m.message = "Select a remote box to setup loopback"
+				return m, nil
+			}
+			m.startForm("loopback")
 		case "u":
 			m.startForm("orca")
 		case "n":
@@ -961,7 +982,11 @@ func (m dashboardModel) View() tea.View {
 		if m.form.kind == "orca" {
 			footer += "\nPlan shows setup steps. Apply writes a disabled user service; firewall setup is separate."
 		}
-		body = dashBox(fmt.Sprintf("Configure %s · field %d/%d", m.form.kind, m.form.focus+1, len(m.form.fields)), strings.Join(lines, "\n")+"\n\n"+dashMuted.Render(footer), width-6, max(4, height-10), true)
+		formTitle := "Configure " + m.form.kind
+		if m.form.kind == "loopback" {
+			formTitle = "Setup loopback"
+		}
+		body = dashBox(fmt.Sprintf("%s · field %d/%d", formTitle, m.form.focus+1, len(m.form.fields)), strings.Join(lines, "\n")+"\n\n"+dashMuted.Render(footer), width-6, max(4, height-10), true)
 	} else {
 		items := m.items()
 		list := []string{}

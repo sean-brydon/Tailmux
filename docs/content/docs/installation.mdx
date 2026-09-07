@@ -73,6 +73,7 @@ The profile's state remains on disk, so an ordinary update reuses its existing T
 | Workflow | Local requirements | Remote requirements |
 | --- | --- | --- |
 | SSH and forwarding | OpenSSH | SSH access; local forwarding permitted for tunnels |
+| Private named forwarding | OpenSSH; administrator access for loopback setup | SSH access; local forwarding permitted for tunnels |
 | `herdr attach` and `herdr sessions` | OpenSSH | Herdr on the SSH command PATH |
 | `herdr open` | OpenSSH and Herdr | Herdr on the SSH command PATH |
 | `orca` | OpenSSH and Orca CLI | Orca runtime, Xvfb/Electron dependencies, firewall; systemd user unit for `serve` |

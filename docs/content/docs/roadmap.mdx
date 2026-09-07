@@ -23,7 +23,7 @@ icon: Route
 
 Provider account authentication, stable domain ownership and Cloudflare DNS routing must be configured before publishing a public URL. Herdr and Orca application installation and provider-agent authentication remain separate. Orca firewall persistence and boot enablement depend on the host's firewall manager.
 
-Saved forwarding does not install an operating-system autostart service. A public URL routed through a laptop is unavailable while that laptop sleeps. Redirect rewriting does not change hardcoded frontend code or register OAuth callbacks.
+Saved forwarding does not install an operating-system autostart service. Private named routes require one-time local `loopback setup`; on macOS setup installs a LaunchDaemon that restores each alias at boot. A public URL routed through a laptop is unavailable while that laptop sleeps. Redirect rewriting does not change hardcoded frontend code or register OAuth callbacks.
 
 ## Future: continuous process discovery
 
